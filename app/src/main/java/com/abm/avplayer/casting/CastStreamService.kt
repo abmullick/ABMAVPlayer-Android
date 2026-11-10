@@ -86,6 +86,9 @@ class CastStreamService : Service() {
         return server
     }
 
+    val hasActiveEndpoint: Boolean
+        get() = singleServer != null || queueServer != null
+
     fun clearServers() {
         singleServer?.close()
         singleServer = null
