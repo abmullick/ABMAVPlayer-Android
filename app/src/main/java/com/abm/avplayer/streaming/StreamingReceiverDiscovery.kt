@@ -240,12 +240,15 @@ object StreamingReceiverDiscovery {
                 val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV YouTube app.")
                 try {
                     val code = connection.responseCode
-                    val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                        ?.bufferedReader()?.use { it.readText().take(16_384) }.orEmpty()
+                    if (code == 404) {
+                        // DIAL 404 means the TV answered but the requested app is not running (or not installed).
+                        return@runCatching DialApplicationStatus("STOPPED", "YouTube app is not running")
+                    }
                     if (code !in 200..299) error("DIAL status failed (HTTP $code).")
+                    val body = connection.inputStream.bufferedReader().use { it.readText().take(16_384) }
                     val xml = parseXml(body)
                     val state = xml?.documentElement?.getAttribute("state")?.takeIf { it.isNotBlank() } ?: "RUNNING"
-                    DialApplicationStatus(state, xml?.documentElement?.let { firstText(it, "name") ?: firstText(it, "link") } ?: "YouTube app")
+                    DialApplicationStatus(state.uppercase(), xml?.documentElement?.let { firstText(it, "name") ?: firstText(it, "link") } ?: "YouTube app")
                 } finally { connection.disconnect() }
             }
         }
