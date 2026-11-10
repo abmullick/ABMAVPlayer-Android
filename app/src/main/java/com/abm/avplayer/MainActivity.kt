@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
                     } else {
                         PlayerScreen(
                             title = title, player = controller,
-                            hasMedia = controller?.currentMediaItem != null,
+                            hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
                             progress = progress,
                             onBrowse = { picker.launch(arrayOf("audio/*", "video/*")) },
@@ -406,7 +406,7 @@ private fun LibraryTab(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun PlayerScreen(
     title: String,
     player: Player?,
-    hasMedia: Boolean,
+    hasVideo: Boolean,
     playing: Boolean,
     position: Long,
     duration: Long,
@@ -426,7 +426,7 @@ private fun PlayerScreen(
     BackHandler(enabled = fullscreen, onBack = onFullscreen)
     if (fullscreen) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            if (hasMedia && player != null) {
+            if (hasVideo && player != null) {
                 AndroidView(
                     factory = { context ->
                         PlayerView(context).apply {
@@ -499,7 +499,7 @@ private fun PlayerScreen(
                     Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                 }
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
-                IconButton(onClick = onFullscreen, enabled = hasMedia) {
+                IconButton(onClick = onFullscreen, enabled = hasVideo) {
                     Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Cyan)
                 }
             }
