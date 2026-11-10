@@ -487,6 +487,10 @@ class StreamingCentreActivity : ComponentActivity() {
                                             if (youtubeRemoteReady) {
                                                 youtubeRemotePlaybackState = "Playing"
                                                 receiverConnectionState = "Connected"
+                                                receiverDialAppState = "RUNNING"
+                                            } else {
+                                                youtubeRemotePlaybackState = "Not paired"
+                                                receiverDialAppState = "Unknown"
                                             }
                                         }
                                     }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
@@ -652,10 +656,13 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 youtubeRemotePlaybackState = "Playing"
                                                 receiverConnectionState = "Connected"
                                                 receiverDialAppState = "RUNNING"
+                                            } else {
+                                                youtubeRemotePlaybackState = "Not paired"
+                                                receiverDialAppState = "Unknown"
                                             }
                                         }
                                         receiverPanel = false
-                                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
+                                    }, enabled = this@StreamingCentreActivity.currentYoutubeVideoId() != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
                                 }
                                 Text("DRM-protected or encrypted streams cannot be extracted. Use the provider's own Cast control for those services.", color = Muted, fontSize = 10.sp)
                                 TextButton(onClick = { receiverPanel = false }, modifier = Modifier.align(Alignment.End)) { Text("Close", color = Cyan) }
