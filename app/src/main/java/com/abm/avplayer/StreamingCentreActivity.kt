@@ -411,6 +411,47 @@ class StreamingCentreActivity : ComponentActivity() {
         }
     }
 
+    private fun requestDlnaCast(receiver: StreamingReceiver, scope: kotlinx.coroutines.CoroutineScope, report: (String) -> Unit) {
+        val web = browser ?: return report("Open a streaming page and start a video first.")
+        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && /^https?:\\/\\//i.test(x.currentSrc)).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
+        web.evaluateJavascript(script) { encoded ->
+            runCatching {
+                val payload = JSONObject(org.json.JSONArray("[$encoded]").getString(0))
+                val url = payload.optString("url")
+                require(url.startsWith("https://") || url.startsWith("http://")) { "This page does not expose a direct video URL. Use the provider's own Cast button." }
+                val mime = payload.optString("type").ifBlank {
+                    when (Uri.parse(url).lastPathSegment?.substringAfterLast('.', "")?.lowercase()) {
+                        "m3u8" -> "application/vnd.apple.mpegurl"
+                        "mpd" -> "application/dash+xml"
+                        "mp4", "m4v" -> "video/mp4"
+                        "webm" -> "video/webm"
+                        else -> "video/mp4"
+                    }
+                }
+                val title = payload.optString("title", "Streaming video")
+                scope.launch {
+                    val result = StreamingReceiverDiscovery.playOnDlna(receiver, url, mime, title)
+                    report(result.fold(
+                        { "DLNA play command sent to ${receiver.name}. The TV must be able to reach the media URL." },
+                        { "DLNA handoff failed: ${it.message ?: "receiver error"}" }
+                    ))
+                }
+            }.onFailure { report(it.message ?: "Could not prepare DLNA playback.") }
+        }
+    }
+
+    private fun launchDialYoutube(receiver: StreamingReceiver, scope: kotlinx.coroutines.CoroutineScope, report: (String) -> Unit) {
+        val page = browser?.url.orEmpty()
+        val videoId = Regex("(?:[?&]v=|youtu\\.be/|/embed/)([A-Za-z0-9_-]{11})").find(page)?.groupValues?.getOrNull(1)
+        if (videoId == null) return report("Open a YouTube video first, then choose Launch YouTube on selected TV.")
+        scope.launch {
+            val result = StreamingReceiverDiscovery.launchYoutubeOnDial(receiver, videoId)
+            report(result.fold(
+                { "YouTube launch request sent to ${receiver.name}." },
+                { "YouTube DIAL launch failed: ${it.message ?: "receiver error"}" }
+            ))
+        }
+    }
     private fun requestVideoCast(report: (String) -> Unit) {
         val web = browser ?: return report("Open a streaming page and start a video first.")
         val castSession = runCatching { CastContext.getSharedInstance(this).sessionManager.currentCastSession }.getOrNull()
