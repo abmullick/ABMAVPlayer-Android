@@ -236,20 +236,27 @@ class StreamingCentreActivity : ComponentActivity() {
                 val receiverId = activeReceiver?.id ?: return@LaunchedEffect
                 while (activeReceiver?.id == receiverId) {
                     val receiver = activeReceiver ?: break
-                    val statusOk = if (receiver.supportsDlna) {
+                    val dlnaOk = if (receiver.supportsDlna) {
                         StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
-                            receiverConnectionState = "Connected"
                             receiverPlaybackState = it.state
                             receiverPosition = it.position
                             receiverDuration = it.duration
                         }.isSuccess
-                    } else {
+                    } else false
+                    val dialOk = if (receiver.supportsDial) {
                         StreamingReceiverDiscovery.getDialApplicationStatus(receiver).onSuccess {
-                            receiverConnectionState = "Connected"
-                            receiverPlaybackState = it.state
+                            if (!receiver.supportsDlna) receiverPlaybackState = it.state
+                            if (it.state.equals("STOPPED", true)) {
+                                youtubeRemoteReady = false
+                                youtubeRemotePlaybackState = "Not paired"
+                            }
                         }.isSuccess
-                    }
-                    if (!statusOk) {
+                    } else false
+                    val statusOk = dlnaOk || dialOk
+                    if (statusOk) {
+                        receiverConnectionState = "Connected"
+                        if (receiver.supportsDlna && !dlnaOk) receiverPlaybackState = "DLNA status unavailable"
+                    } else {
                         receiverConnectionState = "Connection lost · retrying"
                         receiverPlaybackState = "Status unavailable"
                         val now = System.currentTimeMillis()
@@ -269,7 +276,6 @@ class StreamingCentreActivity : ComponentActivity() {
                     delay(5_000)
                 }
             }
-
             LaunchedEffect(Unit) {
                 while (true) {
                     val remote = runCatching {
@@ -446,7 +452,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     if (receiver.supportsDial) Text("YouTube remote: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
-                                TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
+                                TextButton(onClick = { activeReceiver = null; youtubeRemoteReady = false; youtubeRemotePlaybackState = "Not paired"; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (receiver.supportsDlna) {
