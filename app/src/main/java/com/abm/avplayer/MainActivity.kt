@@ -4,6 +4,10 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -82,6 +86,7 @@ class MainActivity : ComponentActivity() {
             var progress by remember { mutableFloatStateOf(0f) }
             var playing by remember { mutableStateOf(false) }
             var title by remember { mutableStateOf("Nothing playing") }
+            var fullscreen by remember { mutableStateOf(false) }
 
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenMultipleDocuments()
@@ -97,6 +102,44 @@ class MainActivity : ComponentActivity() {
                     scope.launch {
                         repository.importUris(uris)
                         page = "library"
+                    }
+                }
+            }
+
+            val subtitlePicker = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument()
+            ) { uri: Uri? ->
+                uri?.let { subtitleUri ->
+                    runCatching {
+                        contentResolver.takePersistableUriPermission(
+                            subtitleUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val active = controller
+                    val current = active?.currentMediaItem
+                    val local = current?.localConfiguration
+                    if (active != null && current != null && local != null) {
+                        val mime = when {
+                            subtitleUri.toString().substringBefore("?").endsWith(".vtt", true) ||
+                                contentResolver.getType(subtitleUri) == "text/vtt" -> MimeTypes.TEXT_VTT
+                            subtitleUri.toString().substringBefore("?").endsWith(".ssa", true) ||
+                                subtitleUri.toString().substringBefore("?").endsWith(".ass", true) -> MimeTypes.TEXT_SSA
+                            else -> MimeTypes.APPLICATION_SUBRIP
+                        }
+                        val subtitle = MediaItem.SubtitleConfiguration.Builder(subtitleUri)
+                            .setMimeType(mime)
+                            .setLanguage("und")
+                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                            .build()
+                        val updated = current.buildUpon()
+                            .setSubtitleConfigurations(local.subtitleConfigurations + subtitle)
+                            .build()
+                        val index = active.currentMediaItemIndex
+                        val resumePosition = active.currentPosition
+                        val wasPlaying = active.playWhenReady
+                        active.replaceMediaItem(index, updated)
+                        active.seekTo(index, resumePosition)
+                        active.playWhenReady = wasPlaying
                     }
                 }
             }
@@ -190,6 +233,18 @@ class MainActivity : ComponentActivity() {
                                         Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                                         else -> Player.REPEAT_MODE_OFF
                                     }
+                                }
+                            },
+                            onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
+                            fullscreen = fullscreen,
+                            onFullscreen = {
+                                fullscreen = !fullscreen
+                                val bars = WindowInsetsControllerCompat(window, window.decorView)
+                                if (fullscreen) {
+                                    bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                    bars.hide(WindowInsetsCompat.Type.systemBars())
+                                } else {
+                                    bars.show(WindowInsetsCompat.Type.systemBars())
                                 }
                             }
                         )
