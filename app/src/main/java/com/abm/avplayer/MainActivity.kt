@@ -66,6 +66,8 @@ import com.abm.avplayer.data.PlaylistEntity
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 val Canvas = Color(0xFF090B12)
 val Panel = Color(0xFF141925)
@@ -424,6 +426,59 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun castRecoveryPreferences() = getSharedPreferences("abm_cast_recovery", Context.MODE_PRIVATE)
+
+    private fun saveCastRecoverySnapshot(items: List<Triple<MediaFileEntity, Uri, String>>, selectedIndex: Int) {
+        val hasLocalSource = items.any { it.second.scheme != "http" && it.second.scheme != "https" }
+        val prefs = castRecoveryPreferences()
+        if (!hasLocalSource) { prefs.edit().remove("snapshot").apply(); return }
+        val jsonItems = JSONArray()
+        items.forEach { (file, uri, mime) ->
+            jsonItems.put(JSONObject().put("uri", uri.toString()).put("title", file.title)
+                .put("mime", mime).put("addedAt", file.addedAt))
+        }
+        val snapshot = JSONObject().put("mode", if (items.size == 1) "single" else "queue")
+            .put("selectedIndex", selectedIndex).put("items", jsonItems)
+        prefs.edit().putString("snapshot", snapshot.toString()).apply()
+    }
+
+    private fun clearCastRecoverySnapshot() {
+        castRecoveryPreferences().edit().remove("snapshot").apply()
+    }
+
+    private fun recoverCastStreamIfNeeded() {
+        val raw = castRecoveryPreferences().getString("snapshot", null) ?: return
+        castMessageState.value = "Checking the local stream before resuming…"
+        withCastStreamService { service ->
+            if (service.hasActiveEndpoint) {
+                castMessageState.value = "Reconnected · local stream is still active"
+                return@withCastStreamService
+            }
+            runCatching {
+                val snapshot = JSONObject(raw)
+                val itemsJson = snapshot.getJSONArray("items")
+                val items = (0 until itemsJson.length()).map { index ->
+                    val item = itemsJson.getJSONObject(index)
+                    val uri = item.getString("uri")
+                    val title = item.getString("title")
+                    val mime = item.getString("mime")
+                    MediaFileEntity(uri, title, mime, item.optLong("addedAt", System.currentTimeMillis())) to Triple(Uri.parse(uri), title, mime)
+                }
+                require(items.isNotEmpty()) { "No saved Cast items" }
+                when (snapshot.optString("mode")) {
+                    "single" -> { val data = items.first().second; castMedia(data.first.toString(), data.second, data.third) }
+                    else -> {
+                        val library = items.map { it.first }
+                        val selectedIndex = snapshot.optInt("selectedIndex", 0).coerceIn(library.indices)
+                        castLibraryQueue(library, library[selectedIndex])
+                    }
+                }
+            }.onFailure {
+                clearCastRecoverySnapshot()
+                castMessageState.value = "Could not restore the local Cast stream. Please select the media again (" + it.message + ")"
+            }
+        }
+    }
     private fun setupCast() {
         runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
             castContext = context
@@ -441,6 +496,7 @@ class MainActivity : ComponentActivity() {
                     castConnectedState.value = true
                     castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
                     castMessageState.value = "Reconnected"
+                    recoverCastStreamIfNeeded()
                 }
                 override fun onSessionEnded(session: CastSession, error: Int) {
                     castConnectedState.value = false
@@ -451,6 +507,7 @@ class MainActivity : ComponentActivity() {
                     castSubtitleAvailableState.value = false
                     castSubtitleEnabledState.value = false
                     castOriginalFutureOrder = null
+                    clearCastRecoverySnapshot()
                     stopCastStreamService()
                 }
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
@@ -460,6 +517,7 @@ class MainActivity : ComponentActivity() {
                     castConnectedState.value = false
                     castDeviceNameState.value = ""
                     castMessageState.value = "Could not restore the Cast session (error $error)"
+                    clearCastRecoverySnapshot()
                     stopCastStreamService()
                 }
                 override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
@@ -501,6 +559,7 @@ class MainActivity : ComponentActivity() {
             require(supported.isNotEmpty()) { "No Cast-compatible media found in this library" }
             val selectedIndex = supported.indexOfFirst { it.first.uri == selected.uri }
             require(selectedIndex >= 0) { "The selected item is not supported by the Cast receiver" }
+            saveCastRecoverySnapshot(supported, selectedIndex)
 
             castStreamService?.clearServers()
 
@@ -651,6 +710,10 @@ class MainActivity : ComponentActivity() {
             val mime = suppliedMime?.takeUnless { it == "application/octet-stream" }
                 ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
                 ?: mimeFromName(uri.lastPathSegment)
+            if (uri.scheme != "http" && uri.scheme != "https") {
+                val recoveryFile = MediaFileEntity(uri.toString(), title, mime, System.currentTimeMillis())
+                saveCastRecoverySnapshot(listOf(Triple(recoveryFile, uri, mime)), 0)
+            } else clearCastRecoverySnapshot()
             val url = if (uri.scheme == "http" || uri.scheme == "https") {
                 castStreamService?.clearServers()
                 uri.toString()
