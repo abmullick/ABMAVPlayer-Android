@@ -1,0 +1,363 @@
+package com.abm.avplayer
+
+import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.SafeBrowsingResponse
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.CastMediaControlIntent
+import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
+import com.google.android.gms.cast.MediaLoadRequestData
+import org.json.JSONObject
+
+private data class StreamingProvider(val name: String, val subtitle: String, val url: String, val accent: Color)
+
+private val streamingProviders = listOf(
+    StreamingProvider("YouTube", "Videos, channels and playlists", "https://www.youtube.com/", Color(0xFFFF5555)),
+    StreamingProvider("Netflix", "Films and series", "https://www.netflix.com/", Color(0xFFE50914)),
+    StreamingProvider("Prime Video", "Movies, series and live sport", "https://www.primevideo.com/", Color(0xFF38BDF8)),
+    StreamingProvider("JioHotstar", "Entertainment and sport", "https://www.hotstar.com/in", Color(0xFF8B7CFF)),
+    StreamingProvider("Sony LIV", "Shows, films and sport", "https://www.sonyliv.com/", Color(0xFF8C7BFF)),
+    StreamingProvider("ZEE5", "TV shows, movies and originals", "https://www.zee5.com/", Color(0xFFB78CFF))
+)
+
+class StreamingCentreActivity : ComponentActivity() {
+    private var browser: WebView? = null
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var originalOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        originalOrientation = requestedOrientation
+        setContent {
+            var homeMode by remember { mutableStateOf(true) }
+            var pageTitle by remember { mutableStateOf("Streaming Centre") }
+            var currentUrl by remember { mutableStateOf("") }
+            var canGoBack by remember { mutableStateOf(false) }
+            var canGoForward by remember { mutableStateOf(false) }
+            var pageProgress by remember { mutableIntStateOf(0) }
+            var browserError by remember { mutableStateOf("") }
+            var castMessage by remember { mutableStateOf("") }
+            val webView = browser
+
+            fun openProvider(provider: StreamingProvider) {
+                homeMode = false
+                browserError = ""
+                browser?.loadUrl(provider.url)
+            }
+
+            BackHandler(enabled = customView != null || (!homeMode && canGoBack)) {
+                if (customView != null) hideCustomView()
+                else browser?.goBack()
+            }
+
+            MaterialTheme {
+                Column(Modifier.fillMaxSize().background(Canvas)) {
+                    Row(
+                        Modifier.fillMaxWidth().background(Panel).padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { if (!homeMode && canGoBack) browser?.goBack() else finish() },
+                            enabled = homeMode || canGoBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        }
+                        IconButton(onClick = { if (!homeMode && canGoForward) browser?.goForward() },
+                            enabled = !homeMode && canGoForward) {
+                            Icon(Icons.Default.ArrowForward, contentDescription = "Forward",
+                                tint = if (!homeMode && canGoForward) Color.White else Muted)
+                        }
+                        IconButton(onClick = { if (!homeMode) browser?.reload() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = Color.White)
+                        }
+                        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                            Text("ABM  ·  STREAMING", color = Cyan, fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                            Text(pageTitle, color = Color.White, fontSize = 12.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = {
+                            homeMode = true
+                            pageTitle = "Streaming Centre"
+                            currentUrl = ""
+                            browserError = ""
+                        }) {
+                            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
+                        }
+                        AndroidView(
+                            factory = { context ->
+                                MediaRouteButton(context).also { button ->
+                                    runCatching { CastButtonFactory.setUpMediaRouteButton(context, button) }
+                                }
+                            },
+                            modifier = Modifier.size(42.dp)
+                        )
+                        IconButton(onClick = { requestVideoCast { castMessage = it } }, enabled = !homeMode) {
+                            Icon(Icons.Default.Cast, contentDescription = "Cast video", tint = Cyan)
+                        }
+                        IconButton(onClick = { openInBrowser() }, enabled = !homeMode && currentUrl.startsWith("https://")) {
+                            Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser", tint = Color.White)
+                        }
+                    }
+                    if (!homeMode && pageProgress in 1..99) {
+                        LinearProgressIndicator(progress = { pageProgress / 100f },
+                            modifier = Modifier.fillMaxWidth().height(2.dp),
+                            color = Cyan, trackColor = Panel)
+                    }
+                    if (castMessage.isNotBlank()) {
+                        Text(castMessage, color = Cyan, fontSize = 11.sp,
+                            modifier = Modifier.fillMaxWidth().background(Raised).padding(horizontal = 14.dp, vertical = 7.dp))
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        AndroidView(
+                            factory = { context -> browser ?: createBrowser(context).also { browser = it } },
+                            modifier = Modifier.fillMaxSize(),
+                            update = { if (it !== browser) browser = it }
+                        )
+                        if (homeMode) {
+                            Column(
+                                Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(listOf(Color(0xFF111827), Canvas, Canvas))
+                                ).padding(18.dp)
+                            ) {
+                                Text("YOUR STREAMING WORLD", color = Color.White, fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Open an official service and sign in with your own account.",
+                                    color = Muted, fontSize = 12.sp)
+                                Spacer(Modifier.height(18.dp))
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(2),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(streamingProviders) { provider ->
+                                        Column(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                                                .background(Panel).clickable { openProvider(provider) }
+                                                .padding(15.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+                                                .background(provider.accent.copy(alpha = .18f)),
+                                                contentAlignment = Alignment.Center) {
+                                                Text(provider.name.take(1), color = provider.accent,
+                                                    fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                            }
+                                            Text(provider.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text(provider.subtitle, color = Muted, fontSize = 10.sp,
+                                                minLines = 2)
+                                            Text("OPEN SERVICE  →", color = Cyan, fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text("Provider subscriptions and availability are managed by each service.",
+                                    color = Muted, fontSize = 10.sp)
+                            }
+                        } else if (browserError.isNotBlank()) {
+                            Column(Modifier.align(Alignment.Center).padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("This page could not be loaded", color = Color.White,
+                                    fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(8.dp))
+                                Text(browserError, color = Muted, fontSize = 12.sp)
+                                TextButton(onClick = { browser?.reload() }) { Text("Try again", color = Cyan) }
+                            }
+                        }
+                    }
+                    if (!homeMode) {
+                        Row(
+                            Modifier.fillMaxWidth().background(Panel).padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(currentUrl, color = Muted, fontSize = 10.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { openInBrowser() }) { Text("Browser", color = Cyan, fontSize = 11.sp) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun createBrowser(context: android.content.Context): WebView {
+        CookieManager.getInstance().setAcceptCookie(true)
+        return WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.databaseEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = true
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                settings.safeBrowsingEnabled = true
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            }
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val uri = request.url
+                    if (uri.scheme.equals("https", true)) return false
+                    if (uri.scheme.equals("http", true)) {
+                        // Never silently downgrade a provider session to clear-text HTTP.
+                        return true
+                    }
+                    if (uri.scheme == "intent") return true
+                    return true
+                }
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    if (url.startsWith("https://")) {
+                        currentUrlState?.invoke(url)
+                        pageErrorState?.invoke("")
+                    }
+                }
+                override fun onPageFinished(view: WebView, url: String) {
+                    currentUrlState?.invoke(url)
+                    titleState?.invoke(view.title ?: url)
+                    navigationState?.invoke(view.canGoBack(), view.canGoForward())
+                }
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                    if (request.isForMainFrame) pageErrorState?.invoke(error.description?.toString() ?: "Network error")
+                }
+                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
+                    handler.cancel()
+                    pageErrorState?.invoke("The site's secure connection could not be verified.")
+                }
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView, newProgress: Int) { progressState?.invoke(newProgress) }
+                override fun onShowCustomView(view: View, callback: CustomViewCallback) { showCustomView(view, callback) }
+                override fun onHideCustomView() { hideCustomView() }
+            }
+        }
+    }
+
+    // Compose state callbacks are assigned by the Activity content before the browser is first navigated.
+    private var currentUrlState: ((String) -> Unit)? = null
+    private var titleState: ((String) -> Unit)? = null
+    private var navigationState: ((Boolean, Boolean) -> Unit)? = null
+    private var progressState: ((Int) -> Unit)? = null
+    private var pageErrorState: ((String) -> Unit)? = null
+
+    private fun openInBrowser() {
+        val url = browser?.url ?: return
+        if (url.startsWith("https://")) runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
+
+    private fun requestVideoCast(report: (String) -> Unit) {
+        val web = browser ?: return report("Open a streaming page and start a video first.")
+        val castSession = runCatching { CastContext.getSharedInstance(this).sessionManager.currentCastSession }.getOrNull()
+        val remote = castSession?.remoteMediaClient
+        if (remote == null) return report("Choose a Google Cast receiver using the Cast icon first.")
+        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && /^https?:\\/\\//i.test(x.currentSrc)).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
+        web.evaluateJavascript(script) { encoded ->
+            runCatching {
+                val payload = JSONObject(encoded ?: "{}")
+                val url = payload.optString("url")
+                require(url.startsWith("https://")) { "No directly addressable HTTPS video URL is exposed by this page. Use the provider's own Cast button where available." }
+                val type = payload.optString("type").ifBlank {
+                    when (Uri.parse(url).lastPathSegment?.substringAfterLast('.', "")?.lowercase()) {
+                        "m3u8" -> "application/x-mpegURL"
+                        "mpd" -> "application/dash+xml"
+                        "mp4", "m4v" -> "video/mp4"
+                        "webm" -> "video/webm"
+                        else -> "video/*"
+                    }
+                }
+                val metadata = CastMediaMetadata(CastMediaMetadata.MEDIA_TYPE_MOVIE).apply {
+                    putString(CastMediaMetadata.KEY_TITLE, payload.optString("title", "Streaming video"))
+                }
+                val info = MediaInfo.Builder(url).setContentType(type)
+                    .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED).setMetadata(metadata).build()
+                remote.load(MediaLoadRequestData.Builder().setMediaInfo(info).setAutoplay(true).build())
+                    .setResultCallback { result ->
+                        report(if (result.status.isSuccess) "Cast request sent. Receiver compatibility and provider access still apply."
+                        else "Receiver rejected the direct video URL (Cast error ${result.status.statusCode}).")
+                    }
+            }.onFailure { report(it.message ?: "Could not hand off this video.") }
+        }
+    }
+
+    private fun showCustomView(view: View, callback: WebChromeClient.CustomViewCallback) {
+        if (customView != null) return callback.onCustomViewHidden()
+        customView = view
+        customViewCallback = callback
+        (window.decorView as? FrameLayout)?.addView(view, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    private fun hideCustomView() {
+        val view = customView ?: return
+        (window.decorView as? FrameLayout)?.removeView(view)
+        customView = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        WindowInsetsControllerCompat(window, window.decorView).show(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onDestroy() {
+        hideCustomView()
+        browser?.apply { stopLoading(); webChromeClient = null; webViewClient = null; destroy() }
+        browser = null
+        super.onDestroy()
+    }
+}
