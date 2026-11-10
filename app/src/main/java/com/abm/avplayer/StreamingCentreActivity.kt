@@ -64,6 +64,7 @@ import com.google.android.gms.cast.MediaSeekOptions
 import com.google.android.gms.cast.MediaStatus
 import org.json.JSONObject
 import com.abm.avplayer.streaming.StreamingReceiver
+import com.abm.avplayer.streaming.DialApplicationInfo
 import com.abm.avplayer.streaming.StreamingReceiverDiscovery
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -119,6 +120,8 @@ class StreamingCentreActivity : ComponentActivity() {
             var receiverControlBusy by remember { mutableStateOf(false) }
             var youtubeRemoteReady by remember { mutableStateOf(false) }
             var receiverDialAppState by remember { mutableStateOf("Unknown") }
+            var dialApplications by remember { mutableStateOf<List<DialApplicationInfo>>(emptyList()) }
+            var dialApplicationsBusy by remember { mutableStateOf(false) }
             var youtubeRemotePlaybackState by remember { mutableStateOf("Not paired") }
             var youtubeRemotePosition by remember { mutableDoubleStateOf(0.0) }
             var youtubeRemoteDuration by remember { mutableDoubleStateOf(0.0) }
@@ -189,6 +192,42 @@ class StreamingCentreActivity : ComponentActivity() {
                     } finally { receiverReconnectBusy = false }
                 }
             }
+            fun loadDialApplications(receiver: StreamingReceiver) {
+                if (!receiver.supportsDial) return
+                dialApplicationsBusy = true
+                scope.launch {
+                    StreamingReceiverDiscovery.getDialApplications(receiver)
+                        .onSuccess {
+                            dialApplications = it
+                            castMessage = if (it.isEmpty()) "The TV did not advertise any DIAL applications." else "Found ${it.size} DIAL application(s) on ${receiver.name}."
+                        }
+                        .onFailure { castMessage = "Could not list TV apps: ${it.message ?: "DIAL error"}" }
+                    dialApplicationsBusy = false
+                }
+            }
+
+            fun controlDialApplication(receiver: StreamingReceiver, applicationName: String, launch: Boolean) {
+                receiverControlBusy = true
+                scope.launch {
+                    val result = if (launch) {
+                        StreamingReceiverDiscovery.launchDialApplication(receiver, applicationName)
+                    } else {
+                        StreamingReceiverDiscovery.stopDialApplication(receiver, applicationName)
+                    }
+                    result.onSuccess {
+                        castMessage = (if (launch) "Launch requested for " else "Stop requested for ") + applicationName + " on " + receiver.name
+                    }.onFailure {
+                        castMessage = "DIAL app command failed: " + (it.message ?: "receiver error")
+                    }
+                    StreamingReceiverDiscovery.getDialApplicationStatus(receiver, applicationName).onSuccess { status ->
+                        dialApplications = dialApplications.map {
+                            if (it.name == applicationName) it.copy(state = status.state, detail = status.detail) else it
+                        }
+                    }
+                    receiverControlBusy = false
+                }
+            }
+
             fun controlSelectedReceiver(action: String) {
                 val receiver = activeReceiver ?: return
                 if (!receiver.supportsDlna) return
@@ -686,6 +725,35 @@ class StreamingCentreActivity : ComponentActivity() {
                                     }
                                 }
                                 val selectedReceiver = receivers.firstOrNull { it.id == selectedReceiverId }
+                                if (selectedReceiver?.supportsDial == true) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            activeReceiver = selectedReceiver
+                                            receiverConnectionState = "Connecting…"
+                                            loadDialApplications(selectedReceiver)
+                                        },
+                                        enabled = !dialApplicationsBusy,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
+                                    ) { Text(if (dialApplicationsBusy) "Loading TV apps…" else "Load apps exposed by this TV") }
+                                    if (dialApplications.isNotEmpty() && activeReceiver?.id == selectedReceiver.id) {
+                                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 170.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            lazyItems(dialApplications, key = { it.name }) { app ->
+                                                Row(
+                                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Raised).padding(horizontal = 8.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(Modifier.weight(1f)) {
+                                                        Text(app.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                        Text(app.state + " · " + app.detail, color = Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    }
+                                                    TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, true) }, enabled = !receiverControlBusy) { Text("Launch", color = Cyan, fontSize = 10.sp) }
+                                                    TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, false) }, enabled = !receiverControlBusy && app.state.equals("RUNNING", true)) { Text("Stop", color = Cyan, fontSize = 10.sp) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 if (selectedReceiver?.supportsDlna == true) {
                                     Button(onClick = {
                                         activeReceiver = selectedReceiver
