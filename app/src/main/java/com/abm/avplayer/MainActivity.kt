@@ -378,7 +378,10 @@ class MainActivity : ComponentActivity() {
                 uri.toString()
             } else {
                 localCastServer?.close()
-                LocalMediaHttpServer(contentResolver, uri).also { localCastServer = it }.start()
+                if (mime == "application/octet-stream" || mime == "video/x-matroska") {
+                    error("This format is not supported by Google's Default Media Receiver. Try MP4, WebM, MP3 or AAC.")
+                }
+                LocalMediaHttpServer(contentResolver, uri, mime).also { localCastServer = it }.start()
             }
             val mediaType = if (mime.startsWith("audio/")) CastMediaMetadata.MEDIA_TYPE_MUSIC_TRACK
                 else CastMediaMetadata.MEDIA_TYPE_MOVIE
