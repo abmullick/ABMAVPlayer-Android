@@ -408,8 +408,18 @@ class MainActivity : ComponentActivity() {
             val result = session.remoteMediaClient?.load(
                 MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build()
             )
-            if (result == null) castMessageState.value = "TV connected, but remote playback is unavailable"
-            else castMessageState.value = "Sending to ${session.castDevice?.friendlyName ?: "TV"}"
+            if (result == null) {
+                castMessageState.value = "TV connected, but remote playback is unavailable"
+            } else {
+                castMessageState.value = "Sending to ${session.castDevice?.friendlyName ?: "TV"}"
+                result.setResultCallback { loadResult ->
+                    castMessageState.value = if (loadResult.status.isSuccess) {
+                        "Playing on ${session.castDevice?.friendlyName ?: "TV"}"
+                    } else {
+                        "TV could not load this media (Cast error ${loadResult.status.statusCode})"
+                    }
+                }
+            }
         }.onFailure {
             localCastServer?.close()
             localCastServer = null
