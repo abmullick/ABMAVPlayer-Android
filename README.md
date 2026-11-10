@@ -83,7 +83,7 @@ Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach 
 2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
 3. **Playback tools:** initial advanced controls implemented; Additional ReplayGain container/tag coverage, subtitle timing/offset controls and DSP/device performance testing remain.
 4. **Casting (initial sender integration):** Google Cast discovery, device picker, session lifecycle, remote play/pause/seek, multi-item queue transfer, live receiver-to-sender title/queue-position synchronisation and LAN streaming for imported files. Shuffle/repeat and approximate reconnect-position recovery are implemented; richer queue editing, reconnect recovery tests and broad codec/device validation remain.
-5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
+5. **Streaming Centre (initial Android milestone implemented):** separate WebView, six official provider launch cards, persistent cookie sessions, browser navigation, HTML5 fullscreen, external-browser handoff and direct HTTPS video URL Cast. Integrated DLNA/UPnP + DIAL discovery, YouTube DIAL handoff and broad provider/DRM device validation remain.
 6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, Cast lifecycle/format tests (including OEM battery-management behaviour), signed release and in-app updates.
 
 ## Documentation
