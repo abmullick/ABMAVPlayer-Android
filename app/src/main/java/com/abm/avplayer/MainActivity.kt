@@ -1,10 +1,13 @@
 package com.abm.avplayer
 
 import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
 import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.IBinder
 import androidx.mediarouter.app.MediaRouteButton
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -44,6 +47,7 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.abm.avplayer.casting.LocalMediaHttpServer
+import com.abm.avplayer.casting.CastStreamService
 import com.abm.avplayer.casting.LocalCastMediaSource
 import com.abm.avplayer.casting.LocalMediaQueueHttpServer
 import com.google.android.gms.cast.MediaInfo
@@ -75,8 +79,25 @@ val Muted = Color(0xFF929BAE)
 class MainActivity : ComponentActivity() {
     private var castContext: CastContext? = null
     private var castListener: SessionManagerListener<CastSession>? = null
-    private var localCastServer: LocalMediaHttpServer? = null
-    private var localCastQueueServer: LocalMediaQueueHttpServer? = null
+    private var castStreamService: CastStreamService? = null
+    private var castStreamBound = false
+    private val pendingCastStreamCallbacks = mutableListOf<(CastStreamService) -> Unit>()
+    private val castStreamConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val service = (binder as? CastStreamService.LocalBinder)?.service() ?: return
+            castStreamService = service
+            val callbacks = pendingCastStreamCallbacks.toList()
+            pendingCastStreamCallbacks.clear()
+            callbacks.forEach { callback -> runCatching { callback(service) }.onFailure {
+                castMessageState.value = "Could not prepare Cast streaming: ${it.message}"
+            } }
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            castStreamService = null
+            castStreamBound = false
+            castMessageState.value = "Cast stream service disconnected; reconnect or select the media again"
+        }
+    }
     private val castConnectedState = mutableStateOf(false)
     private val castDeviceNameState = mutableStateOf("")
     private val castMessageState = mutableStateOf("")
@@ -379,6 +400,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun withCastStreamService(callback: (CastStreamService) -> Unit) {
+        castStreamService?.let { callback(it); return }
+        pendingCastStreamCallbacks += callback
+        if (castStreamBound) return
+        val intent = Intent(this, CastStreamService::class.java)
+        runCatching {
+            startForegroundService(intent)
+            castStreamBound = bindService(intent, castStreamConnection, Context.BIND_AUTO_CREATE)
+            if (!castStreamBound) error("Android could not bind the Cast stream service")
+        }.onFailure {
+            pendingCastStreamCallbacks.clear()
+            castMessageState.value = "Could not start background Cast streaming: ${it.message}"
+        }
+    }
+
+    private fun stopCastStreamService() {
+        pendingCastStreamCallbacks.clear()
+        castStreamService?.stopStreaming()
+        castStreamService = null
+        if (castStreamBound) {
+            runCatching { unbindService(castStreamConnection) }
+            castStreamBound = false
+        }
+    }
+
     private fun setupCast() {
         runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
             castContext = context
@@ -406,10 +452,7 @@ class MainActivity : ComponentActivity() {
                     castSubtitleAvailableState.value = false
                     castSubtitleEnabledState.value = false
                     castOriginalFutureOrder = null
-                    localCastServer?.close()
-                    localCastServer = null
-                    localCastQueueServer?.close()
-                    localCastQueueServer = null
+                    stopCastStreamService()
                 }
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
                     castMessageState.value = "Could not connect to TV (error $error)"
@@ -418,10 +461,7 @@ class MainActivity : ComponentActivity() {
                     castConnectedState.value = false
                     castDeviceNameState.value = ""
                     castMessageState.value = "Could not restore the Cast session (error $error)"
-                    localCastServer?.close()
-                    localCastServer = null
-                    localCastQueueServer?.close()
-                    localCastQueueServer = null
+                    stopCastStreamService()
                 }
                 override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
                 override fun onSessionEnding(session: CastSession) { castMessageState.value = "Disconnecting…" }
@@ -442,6 +482,14 @@ class MainActivity : ComponentActivity() {
 
     private fun castLibraryQueue(library: List<MediaFileEntity>, selected: MediaFileEntity) {
         val session = castContext?.sessionManager?.currentCastSession ?: return
+        val needsLanServer = library.any { file ->
+            val scheme = Uri.parse(file.uri).scheme
+            scheme != "http" && scheme != "https"
+        }
+        if (needsLanServer && castStreamService == null) {
+            withCastStreamService { castLibraryQueue(library, selected) }
+            return
+        }
         runCatching {
             val supported = library.mapNotNull { file ->
                 val uri = Uri.parse(file.uri)
@@ -455,10 +503,7 @@ class MainActivity : ComponentActivity() {
             val selectedIndex = supported.indexOfFirst { it.first.uri == selected.uri }
             require(selectedIndex >= 0) { "The selected item is not supported by the Cast receiver" }
 
-            localCastServer?.close()
-            localCastServer = null
-            localCastQueueServer?.close()
-            localCastQueueServer = null
+            castStreamService?.clearServers()
 
             val currentConfig = controllerState.value?.currentMediaItem?.localConfiguration
             val selectedSubtitle = currentConfig
@@ -474,8 +519,7 @@ class MainActivity : ComponentActivity() {
                 localSources += LocalCastMediaSource("subtitle$selectedIndex", selectedSubtitleUri, "text/vtt")
             }
             val queueServer = if (localSources.isNotEmpty()) {
-                LocalMediaQueueHttpServer(contentResolver, localSources).also { localCastQueueServer = it }
-                    .also { it.start() }
+                castStreamService?.startQueueServer(localSources)
             } else null
 
             val queueItems = supported.mapIndexed { index, (file, uri, mime) ->
@@ -524,8 +568,7 @@ class MainActivity : ComponentActivity() {
                 castMessageState.value = if (result.status.isSuccess) {
                     "Playing library queue on ${session.castDevice?.friendlyName ?: "TV"}"
                 } else {
-                    localCastQueueServer?.close()
-                    localCastQueueServer = null
+                    castStreamService?.clearServers()
                     "TV could not load the queue (Cast error ${result.status.statusCode})"
                 }
             }
@@ -533,8 +576,7 @@ class MainActivity : ComponentActivity() {
             if (skipped > 0) castMessageState.value = "Sending ${supported.size} compatible items; skipped $skipped unsupported file(s)"
             if (selectedSubtitle != null) castMessageState.value = "Cast queue sent with WebVTT subtitles available for the selected item"
         }.onFailure {
-            localCastQueueServer?.close()
-            localCastQueueServer = null
+            castStreamService?.clearServers()
             castMessageState.value = "Cast queue failed: ${it.message}"
         }
     }
@@ -600,20 +642,25 @@ class MainActivity : ComponentActivity() {
 
     private fun castMedia(uriText: String, title: String, suppliedMime: String?) {
         val session = castContext?.sessionManager?.currentCastSession ?: return
+        val requestedUri = Uri.parse(uriText)
+        if (requestedUri.scheme != "http" && requestedUri.scheme != "https" && castStreamService == null) {
+            withCastStreamService { castMedia(uriText, title, suppliedMime) }
+            return
+        }
         runCatching {
             val uri = Uri.parse(uriText)
             val mime = suppliedMime?.takeUnless { it == "application/octet-stream" }
                 ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
                 ?: mimeFromName(uri.lastPathSegment)
-            localCastServer?.close()
-            localCastServer = null
             val url = if (uri.scheme == "http" || uri.scheme == "https") {
+                castStreamService?.clearServers()
                 uri.toString()
             } else {
                 if (mime == "application/octet-stream" || mime == "video/x-matroska") {
                     error("This format is not supported by Google's Default Media Receiver. Try MP4, WebM, MP3 or AAC.")
                 }
-                LocalMediaHttpServer(contentResolver, uri, mime).also { localCastServer = it }.start()
+                castStreamService?.startSingleServer(uri, mime)
+                    ?: error("Background Cast streaming service is unavailable")
             }
             val mediaType = if (mime.startsWith("audio/")) CastMediaMetadata.MEDIA_TYPE_MUSIC_TRACK
                 else CastMediaMetadata.MEDIA_TYPE_MOVIE
@@ -640,8 +687,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }.onFailure {
-            localCastServer?.close()
-            localCastServer = null
+            castStreamService?.clearServers()
             castMessageState.value = "Cast failed: ${it.message}"
         }
     }
@@ -666,10 +712,11 @@ class MainActivity : ComponentActivity() {
             castContext?.sessionManager?.removeSessionManagerListener(listener, CastSession::class.java)
         }
         castListener = null
-        localCastServer?.close()
-        localCastServer = null
-        localCastQueueServer?.close()
-        localCastQueueServer = null
+        if (castStreamBound) {
+            runCatching { unbindService(castStreamConnection) }
+            castStreamBound = false
+        }
+        castStreamService = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controllerState.value = null
