@@ -618,9 +618,13 @@ class StreamingCentreActivity : ComponentActivity() {
         }
     }
 
-    private fun launchDialYoutube(receiver: StreamingReceiver, scope: kotlinx.coroutines.CoroutineScope, report: (String) -> Unit) {
+    private fun currentYoutubeVideoId(): String? {
         val page = browser?.url.orEmpty()
-        val videoId = Regex("(?:[?&]v=|youtu\\.be/|/embed/)([A-Za-z0-9_-]{11})").find(page)?.groupValues?.getOrNull(1)
+        return Regex("(?:[?&]v=|youtu\\.be/|/embed/|/shorts/)([A-Za-z0-9_-]{11})")
+            .find(page)?.groupValues?.getOrNull(1)
+    }
+    private fun launchDialYoutube(receiver: StreamingReceiver, scope: kotlinx.coroutines.CoroutineScope, report: (String) -> Unit) {
+        val videoId = currentYoutubeVideoId()
         if (videoId == null) return report("Open a YouTube video first, then choose Launch YouTube on selected TV.")
         scope.launch {
             val result = StreamingReceiverDiscovery.launchYoutubeOnDial(receiver, videoId)
