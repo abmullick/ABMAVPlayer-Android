@@ -39,14 +39,29 @@ class CastStreamService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        CastDiagnostics.info("SERVICE: created; sdk=${Build.VERSION.SDK_INT}")
         runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
+            CastDiagnostics.info("SERVICE: Cast SDK available inside service")
             castContext = context
             val listener = object : SessionManagerListener<CastSession> {
-                override fun onSessionStarted(session: CastSession, sessionId: String) = Unit
-                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = Unit
-                override fun onSessionEnded(session: CastSession, error: Int) = stopStreaming()
-                override fun onSessionStartFailed(session: CastSession, error: Int) = stopStreaming()
-                override fun onSessionResumeFailed(session: CastSession, error: Int) = stopStreaming()
+                override fun onSessionStarted(session: CastSession, sessionId: String) {
+                    CastDiagnostics.info("SERVICE_SESSION: started; device=${session.castDevice?.friendlyName}")
+                }
+                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                    CastDiagnostics.info("SERVICE_SESSION: resumed; wasSuspended=$wasSuspended")
+                }
+                override fun onSessionEnded(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SERVICE_SESSION: ended; error=$error")
+                    stopStreaming()
+                }
+                override fun onSessionStartFailed(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SERVICE_SESSION: start failed; error=$error")
+                    stopStreaming()
+                }
+                override fun onSessionResumeFailed(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SERVICE_SESSION: resume failed; error=$error")
+                    stopStreaming()
+                }
                 override fun onSessionStarting(session: CastSession) = Unit
                 override fun onSessionEnding(session: CastSession) = Unit
                 override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
@@ -54,34 +69,46 @@ class CastStreamService : Service() {
             }
             castSessionListener = listener
             context.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+        }.onFailure { error ->
+            CastDiagnostics.warn("SERVICE: Cast SDK initialization failed", error)
         }
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        CastDiagnostics.info("SERVICE: foreground start requested; startId=$startId")
         startForeground(NOTIFICATION_ID, buildNotification())
         return START_NOT_STICKY
     }
 
     fun startSingleServer(uri: android.net.Uri, contentType: String): String {
+        CastDiagnostics.info("HTTP_SERVER: preparing single endpoint; scheme=${uri.scheme}; mime=$contentType")
         clearServers()
         val server = LocalMediaHttpServer(contentResolver, uri, contentType)
         singleServer = server
-        return runCatching { server.start() }.onFailure {
+        return runCatching { server.start() }.onFailure { error ->
+            CastDiagnostics.warn("HTTP_SERVER: failed to start single endpoint", error)
             singleServer = null
             releaseLocks()
-        }.getOrThrow().also { acquireLocks() }
+        }.getOrThrow().also {
+            CastDiagnostics.info("HTTP_SERVER: single endpoint started; urlHost=${android.net.Uri.parse(it).host}; port=${android.net.Uri.parse(it).port}")
+            acquireLocks()
+        }
     }
 
     fun startQueueServer(sources: List<LocalCastMediaSource>): LocalMediaQueueHttpServer {
+        CastDiagnostics.info("HTTP_SERVER: preparing queue endpoint; sourceCount=${sources.size}; mimeTypes=${sources.map { it.contentType }.distinct()}")
         clearServers()
         val server = LocalMediaQueueHttpServer(contentResolver, sources)
         queueServer = server
-        runCatching { server.start() }.onFailure {
+        runCatching { server.start() }.onFailure { error ->
+            CastDiagnostics.warn("HTTP_SERVER: failed to start queue endpoint", error)
             queueServer = null
             releaseLocks()
-        }.getOrThrow()
+        }.getOrThrow().also {
+            CastDiagnostics.info("HTTP_SERVER: queue endpoint started; baseUrlHost=${android.net.Uri.parse(it).host}; port=${android.net.Uri.parse(it).port}")
+        }
         acquireLocks()
         return server
     }
@@ -90,6 +117,7 @@ class CastStreamService : Service() {
         get() = singleServer != null || queueServer != null
 
     fun clearServers() {
+        if (singleServer != null || queueServer != null) CastDiagnostics.info("HTTP_SERVER: clearing active local endpoints")
         singleServer?.close()
         singleServer = null
         queueServer?.close()
@@ -98,6 +126,7 @@ class CastStreamService : Service() {
     }
 
     fun stopStreaming() {
+        CastDiagnostics.info("SERVICE: stopStreaming invoked")
         clearServers()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
