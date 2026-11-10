@@ -102,9 +102,16 @@ class StreamingCentreActivity : ComponentActivity() {
                 browser?.loadUrl(provider.url)
             }
 
-            BackHandler(enabled = customView != null || (!homeMode && canGoBack)) {
+            BackHandler(enabled = customView != null || !homeMode) {
                 if (customView != null) hideCustomView()
-                else browser?.goBack()
+                else if (canGoBack) browser?.goBack()
+                else {
+                    homeMode = true
+                    pageTitle = "Streaming Centre"
+                    currentUrl = ""
+                    browser?.stopLoading()
+                    browser?.loadUrl("about:blank")
+                }
             }
 
             MaterialTheme {
@@ -113,8 +120,16 @@ class StreamingCentreActivity : ComponentActivity() {
                         Modifier.fillMaxWidth().background(Panel).padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { if (!homeMode && canGoBack) browser?.goBack() else finish() },
-                            enabled = homeMode || canGoBack) {
+                        IconButton(onClick = {
+                            if (!homeMode && canGoBack) browser?.goBack()
+                            else if (!homeMode) {
+                                homeMode = true
+                                pageTitle = "Streaming Centre"
+                                currentUrl = ""
+                                browser?.stopLoading()
+                                browser?.loadUrl("about:blank")
+                            } else finish()
+                        }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
                         IconButton(onClick = { if (!homeMode && canGoForward) browser?.goForward() },
