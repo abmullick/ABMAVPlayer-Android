@@ -98,7 +98,7 @@ fun AdvancedPlaybackMenu(
             title = "Subtitle tracks", onDismiss = { subtitlesOpen = false })
     }
     if (equalizerOpen && player != null) {
-        EqualizerDialog(player = player, onDismiss = { equalizerOpen = false })
+        EqualizerDialog(onDismiss = { equalizerOpen = false })
     }
 }
 
@@ -212,7 +212,7 @@ private fun TrackDialog(
 }
 
 @Composable
-private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
+private fun EqualizerDialog(onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var enabled by remember { mutableStateOf(TenBandEqSettings.enabled) }
     var levels by remember { mutableStateOf(TenBandEqSettings.gains().toList()) }
