@@ -460,7 +460,9 @@ class MainActivity : ComponentActivity() {
 private fun CastRouteButton() {
     AndroidView(
         factory = { context ->
-            MediaRouteButton(context).also { CastButtonFactory.setUpMediaRouteButton(context, it) }
+            MediaRouteButton(context).also { button ->
+                runCatching { CastButtonFactory.setUpMediaRouteButton(context, button) }
+            }
         },
         modifier = Modifier.size(42.dp)
     )
