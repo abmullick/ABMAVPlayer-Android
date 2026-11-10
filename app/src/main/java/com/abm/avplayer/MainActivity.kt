@@ -64,12 +64,12 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Canvas = Color(0xFF090B12)
-private val Panel = Color(0xFF141925)
-private val Raised = Color(0xFF1B2332)
-private val Cyan = Color(0xFF54D8E8)
-private val Violet = Color(0xFF9A7BFF)
-private val Muted = Color(0xFF929BAE)
+val Canvas = Color(0xFF090B12)
+val Panel = Color(0xFF141925)
+val Raised = Color(0xFF1B2332)
+val Cyan = Color(0xFF54D8E8)
+val Violet = Color(0xFF9A7BFF)
+val Muted = Color(0xFF929BAE)
 
 class MainActivity : ComponentActivity() {
     private var castContext: CastContext? = null
@@ -790,7 +790,7 @@ private fun PlayerScreen(
                         )),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!castConnected && hasMedia && player != null) {
+                    if (!castConnected && player?.currentMediaItem != null && player != null) {
                         AndroidView(
                             factory = { context ->
                                 PlayerView(context).apply {
