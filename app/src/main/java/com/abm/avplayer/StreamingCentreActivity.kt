@@ -643,6 +643,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                 if (selectedReceiver?.supportsDlna == true) {
                                     Button(onClick = {
                                         activeReceiver = selectedReceiver
+                                        receiverConnectionState = "Connecting…"
                                         receiverPlaybackState = "Starting…"
                                         requestDlnaCast(selectedReceiver, scope) { castMessage = it }
                                         receiverPanel = false
@@ -651,7 +652,10 @@ class StreamingCentreActivity : ComponentActivity() {
                                 if (selectedReceiver?.supportsDial == true) {
                                     OutlinedButton(onClick = {
                                         activeReceiver = selectedReceiver
+                                        receiverConnectionState = "Connecting…"
                                         receiverPlaybackState = "Launching…"
+                                        youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(selectedReceiver)
+                                        if (!youtubeRemoteReady) youtubeRemotePlaybackState = "Not paired"
                                         launchDialYoutube(selectedReceiver, scope) {
                                             castMessage = it
                                             youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(selectedReceiver)
