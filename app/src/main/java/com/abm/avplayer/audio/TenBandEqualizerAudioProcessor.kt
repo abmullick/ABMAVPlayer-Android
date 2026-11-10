@@ -28,6 +28,15 @@ object TenBandEqSettings {
     @Volatile
     private var currentGains = FloatArray(BAND_COUNT)
 
+    @Volatile var preampDb: Float = 0f
+    @Volatile var autoHeadroom: Boolean = true
+    @Volatile var compressorEnabled: Boolean = false
+    @Volatile var compressorThresholdDb: Float = -18f
+    @Volatile var compressorRatio: Float = 3f
+    @Volatile var compressorAttackMs: Float = 10f
+    @Volatile var compressorReleaseMs: Float = 120f
+    @Volatile var compressorMakeupDb: Float = 0f
+
     fun gains(): FloatArray = currentGains.copyOf()
 
     fun setEnabled(value: Boolean) {
@@ -52,9 +61,15 @@ object TenBandEqSettings {
         val stored = preferences.getString("gains", null)
             ?.split(",")
             ?.mapNotNull { it.toFloatOrNull() }
-        if (stored != null && stored.size == BAND_COUNT) {
-            setGains(stored.toFloatArray())
-        }
+        if (stored != null && stored.size == BAND_COUNT) setGains(stored.toFloatArray())
+        preampDb = preferences.getFloat("preamp_db", 0f).coerceIn(-12f, 12f)
+        autoHeadroom = preferences.getBoolean("auto_headroom", true)
+        compressorEnabled = preferences.getBoolean("compressor_enabled", false)
+        compressorThresholdDb = preferences.getFloat("compressor_threshold_db", -18f).coerceIn(-36f, 0f)
+        compressorRatio = preferences.getFloat("compressor_ratio", 3f).coerceIn(1f, 10f)
+        compressorAttackMs = preferences.getFloat("compressor_attack_ms", 10f).coerceIn(1f, 100f)
+        compressorReleaseMs = preferences.getFloat("compressor_release_ms", 120f).coerceIn(10f, 1000f)
+        compressorMakeupDb = preferences.getFloat("compressor_makeup_db", 0f).coerceIn(0f, 12f)
     }
 
     fun save(context: Context) {
@@ -62,6 +77,14 @@ object TenBandEqSettings {
             .edit()
             .putBoolean("enabled", enabled)
             .putString("gains", gains().joinToString(","))
+            .putFloat("preamp_db", preampDb)
+            .putBoolean("auto_headroom", autoHeadroom)
+            .putBoolean("compressor_enabled", compressorEnabled)
+            .putFloat("compressor_threshold_db", compressorThresholdDb)
+            .putFloat("compressor_ratio", compressorRatio)
+            .putFloat("compressor_attack_ms", compressorAttackMs)
+            .putFloat("compressor_release_ms", compressorReleaseMs)
+            .putFloat("compressor_makeup_db", compressorMakeupDb)
             .apply()
     }
 
@@ -126,6 +149,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         states = Array(TenBandEqSettings.BAND_COUNT) {
             Array(channelCount) { BiquadState() }
         }
+        compressorEnvelope = DoubleArray(channelCount)
         updateCoefficients(TenBandEqSettings.gains())
         return inputAudioFormat
     }
@@ -138,6 +162,14 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         val enabled = TenBandEqSettings.enabled
         val gains = TenBandEqSettings.gains()
         if (enabled && !gains.contentEquals(lastGains)) updateCoefficients(gains)
+        val maxBoost = if (enabled) gains.maxOrNull()?.coerceAtLeast(0f) ?: 0f else 0f
+        val preampDb = TenBandEqSettings.preampDb - if (TenBandEqSettings.autoHeadroom) maxBoost else 0f
+        val preampLinear = 10.0.pow(preampDb.toDouble() / 20.0)
+        val makeupLinear = 10.0.pow(TenBandEqSettings.compressorMakeupDb.toDouble() / 20.0)
+        val attack = kotlin.math.exp(-1.0 / (sampleRateHz * TenBandEqSettings.compressorAttackMs / 1000.0).coerceAtLeast(1.0))
+        val release = kotlin.math.exp(-1.0 / (sampleRateHz * TenBandEqSettings.compressorReleaseMs / 1000.0).coerceAtLeast(1.0))
+        val threshold = TenBandEqSettings.compressorThresholdDb.toDouble()
+        val ratio = TenBandEqSettings.compressorRatio.toDouble().coerceAtLeast(1.0)
 
         if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) {
             while (input.remaining() >= 4 * channelCount) {
@@ -225,6 +257,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
     override fun onFlush() {
         states.forEach { channelStates -> channelStates.forEach { it.clear() } }
         compressorEnvelope.fill(0.0)
+        compressorEnvelope.fill(0.0)
     }
 
     override fun onReset() {
@@ -232,6 +265,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         channelCount = 0
         coefficients = emptyArray()
         states = emptyArray()
+        compressorEnvelope = DoubleArray(0)
         lastGains = FloatArray(TenBandEqSettings.BAND_COUNT) { Float.NaN }
     }
 }
