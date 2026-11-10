@@ -1,5 +1,6 @@
 package com.abm.avplayer
 
+import android.content.Context
 import android.media.audiofx.Equalizer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -216,7 +218,10 @@ private fun TrackDialog(
 @OptIn(UnstableApi::class)
 @Composable
 private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
-    val audioSessionId = player.audioSessionId
+    val context = LocalContext.current
+    val audioSessionId = player.audioSessionId.takeIf { it > 0 }
+        ?: context.getSharedPreferences("abm_playback", Context.MODE_PRIVATE)
+            .getInt("audio_session_id", C.AUDIO_SESSION_ID_UNSET)
     val equalizer = remember(audioSessionId) {
         if (audioSessionId > 0) runCatching { Equalizer(0, audioSessionId) }.getOrNull()
         else null
