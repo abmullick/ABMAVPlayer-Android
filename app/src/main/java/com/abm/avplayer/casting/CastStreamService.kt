@@ -13,7 +13,9 @@ import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.abm.avplayer.MainActivity
-import com.abm.avplayer.R
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 
 /**
  * Owns the temporary LAN endpoints used by Google Cast.
@@ -31,10 +33,28 @@ class CastStreamService : Service() {
     private var queueServer: LocalMediaQueueHttpServer? = null
     private var cpuLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var castContext: CastContext? = null
+    private var castSessionListener: SessionManagerListener<CastSession>? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
+            castContext = context
+            val listener = object : SessionManagerListener<CastSession> {
+                override fun onSessionStarted(session: CastSession, sessionId: String) = Unit
+                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = Unit
+                override fun onSessionEnded(session: CastSession, error: Int) = stopStreaming()
+                override fun onSessionStartFailed(session: CastSession, error: Int) = stopStreaming()
+                override fun onSessionResumeFailed(session: CastSession, error: Int) = stopStreaming()
+                override fun onSessionStarting(session: CastSession) = Unit
+                override fun onSessionEnding(session: CastSession) = Unit
+                override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
+                override fun onSessionSuspended(session: CastSession, reason: Int) = Unit
+            }
+            castSessionListener = listener
+            context.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -128,6 +148,11 @@ class CastStreamService : Service() {
     }
 
     override fun onDestroy() {
+        castSessionListener?.let { listener ->
+            castContext?.sessionManager?.removeSessionManagerListener(listener, CastSession::class.java)
+        }
+        castSessionListener = null
+        castContext = null
         clearServers()
         super.onDestroy()
     }
