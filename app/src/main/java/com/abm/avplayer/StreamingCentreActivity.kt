@@ -344,7 +344,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("+30s", color = Cyan) }
                                 } else if (receiver.supportsDial) {
                                     TextButton(onClick = {
-                                        val videoId = currentYoutubeVideoId()
+                                        val videoId = this@StreamingCentreActivity.currentYoutubeVideoId()
                                         if (videoId != null) {
                                             receiverControlBusy = true
                                             scope.launch {
@@ -354,7 +354,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 receiverControlBusy = false
                                             }
                                         }
-                                    }, enabled = !receiverControlBusy && currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
                                     TextButton(onClick = {
                                         receiverControlBusy = true
                                         scope.launch {
