@@ -53,12 +53,13 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - App-owned ten-band peaking-EQ DSP in Media3's decoded PCM pipeline, with persistent gains and seven presets.
 - Output preamp control and automatic headroom compensation against the highest positive EQ band.
 - Configurable peak-detection dynamic-range compressor with threshold, ratio, attack/release timing and make-up gain; settings persist between sessions.
+- ReplayGain normalisation from supported embedded Vorbis comments and ID3 user-text/comment frames, including track/album gain and peak tags, plus R128 gain tags. Track or album mode is selectable and peak metadata constrains positive gain.
 
 ## Planned milestones
 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
 2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
-3. **Playback tools:** initial advanced controls implemented; ReplayGain tag parsing and loudness normalisation, subtitle timing/offset controls and DSP/device performance testing remain.
+3. **Playback tools:** initial advanced controls implemented; Additional ReplayGain container/tag coverage, subtitle timing/offset controls and DSP/device performance testing remain.
 4. **Casting:** Google Cast discovery, device picker, remote playback state and recovery.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
 6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, tests, signed release and in-app updates.
