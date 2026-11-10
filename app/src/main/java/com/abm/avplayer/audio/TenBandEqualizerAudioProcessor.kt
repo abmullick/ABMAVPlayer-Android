@@ -122,7 +122,7 @@ object TenBandEqSettings {
             "ALBUM" -> replayGainAlbumPeak ?: replayGainTrackPeak
             else -> replayGainTrackPeak ?: replayGainAlbumPeak
         }
-        val peakSafeGain = peak?.takeIf { it > 1f }?.let {
+        val peakSafeGain = peak?.takeIf { it > 0f }?.let {
             (-20.0 * kotlin.math.log10(it.toDouble())).toFloat()
         }
         return (peakSafeGain?.let { minOf(gain, it) } ?: gain).coerceIn(-24f, 18f)
