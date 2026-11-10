@@ -20,13 +20,13 @@
 - `:feature:streaming`: isolated WebView experience and provider launch/navigation.
 - `:feature:settings`: appearance, playback, network and about/help settings.
 
-The initial commit keeps the project as a single Gradle application module to make the first Android Studio import straightforward. Extract modules when their boundaries have real implementations.
+The initial project keeps the app in one Gradle module for straightforward Android Studio import. Room currently stores imported media references, playlists and playlist membership. The media library uses Storage Access Framework URIs; it does not silently scan the entire device.
 
 ## Playback
 
 Media3/ExoPlayer is the initial playback engine. A production release should move the player into a `MediaSessionService`, expose a `MediaController` to the UI, and implement notification/lock-screen transport controls. Audio/video format support depends on Android platform decoders and the Media3 extension set.
 
-An optional FFmpeg or libmpv engine may be added for formats that need software decoding or advanced subtitle handling. Before selecting or bundling a native engine, verify Android ABI coverage, binary size, maintenance status and all LGPL/GPL/other licensing obligations.
+Playback is hosted by `PlayerService`, a `MediaSessionService`; the Compose activity connects through a `MediaController`. This keeps the player and system media session outside the screen lifecycle. The current queue is created from the imported library when a track is selected; queue restoration and full queue editing remain future work. An optional FFmpeg or libmpv engine may be added for formats that need software decoding or advanced subtitle handling. Before selecting or bundling a native engine, verify Android ABI coverage, binary size, maintenance status and all LGPL/GPL/other licensing obligations.
 
 ## Casting
 
