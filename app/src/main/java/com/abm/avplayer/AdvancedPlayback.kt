@@ -226,6 +226,9 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
     var attackMs by remember { mutableStateOf(TenBandEqSettings.compressorAttackMs) }
     var releaseMs by remember { mutableStateOf(TenBandEqSettings.compressorReleaseMs) }
     var makeup by remember { mutableStateOf(TenBandEqSettings.compressorMakeupDb) }
+    var replayGainEnabled by remember { mutableStateOf(TenBandEqSettings.replayGainEnabled) }
+    var replayGainMode by remember { mutableStateOf(TenBandEqSettings.replayGainMode) }
+    var replayGainMenuOpen by remember { mutableStateOf(false) }
     val presets = listOf("Flat", "Bass Boost", "Treble Boost", "Rock", "Classical", "Jazz", "Vocal")
 
     fun applyGains(values: List<Float>) {
@@ -290,6 +293,38 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                 ) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("Loudness normalisation", color = Cyan, fontWeight = FontWeight.SemiBold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("ReplayGain", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                androidx.compose.material3.Switch(checked = replayGainEnabled, onCheckedChange = {
+                                    replayGainEnabled = it
+                                    TenBandEqSettings.replayGainEnabled = it
+                                    TenBandEqSettings.save(context)
+                                })
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box {
+                                    TextButton(onClick = { replayGainMenuOpen = true }, enabled = replayGainEnabled) {
+                                        Text(if (replayGainMode == "ALBUM") "Album gain ▾" else "Track gain ▾", color = if (replayGainEnabled) Cyan else Muted)
+                                    }
+                                    DropdownMenu(expanded = replayGainMenuOpen, onDismissRequest = { replayGainMenuOpen = false }) {
+                                        DropdownMenuItem(text = { Text("Track gain (radio)") }, onClick = {
+                                            replayGainMode = "TRACK"
+                                            TenBandEqSettings.replayGainMode = "TRACK"
+                                            TenBandEqSettings.save(context)
+                                            replayGainMenuOpen = false
+                                        })
+                                        DropdownMenuItem(text = { Text("Album gain (audiophile)") }, onClick = {
+                                            replayGainMode = "ALBUM"
+                                            TenBandEqSettings.replayGainMode = "ALBUM"
+                                            TenBandEqSettings.save(context)
+                                            replayGainMenuOpen = false
+                                        })
+                                    }
+                                }
+                                Text("Uses embedded ReplayGain / R128 tags when present; otherwise gain stays neutral.", color = Muted, fontSize = 10.sp)
+                            }
+                            HorizontalDivider(color = Raised)
                             Text("Output & dynamics", color = Cyan, fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Automatic EQ headroom", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
