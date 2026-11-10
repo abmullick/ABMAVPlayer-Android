@@ -28,6 +28,7 @@ class PlayerService : MediaSessionService() {
             ): AudioSink {
                 val processor = TenBandEqualizerAudioProcessor()
                 return DefaultAudioSink.Builder(context)
+                    // Keep the integer PCM path so Media3's time-stretch processor remains available.
                     .setEnableFloatOutput(false)
                     .setEnableAudioTrackPlaybackParams(enableAudioOutputPlaybackParams)
                     .setAudioProcessors(arrayOf(processor))
@@ -36,13 +37,6 @@ class PlayerService : MediaSessionService() {
         }
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory).build()
         player = exoPlayer
-        val sessionId = exoPlayer.audioSessionId
-        if (sessionId > 0) {
-            getSharedPreferences("abm_playback", MODE_PRIVATE)
-                .edit()
-                .putInt("audio_session_id", sessionId)
-                .apply()
-        }
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
     }
 
