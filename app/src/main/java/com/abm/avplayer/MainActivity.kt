@@ -376,6 +376,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
+                            onStreaming = { startActivity(Intent(this@MainActivity, StreamingCentreActivity::class.java)) },
                             fullscreen = fullscreen,
                             onFullscreen = {
                                 fullscreen = !fullscreen
@@ -985,6 +986,7 @@ private fun PlayerScreen(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     onPickSubtitle: () -> Unit,
+    onStreaming: () -> Unit,
     fullscreen: Boolean,
     onFullscreen: () -> Unit
 ) {
@@ -1182,6 +1184,15 @@ private fun PlayerScreen(
                     Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet)
                     Spacer(Modifier.width(8.dp)); Text("Library", color = Color.White)
                 }
+            }
+            Button(onClick = onStreaming, modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(15.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF20283A))) {
+                Icon(Icons.Default.Language, contentDescription = null, tint = Cyan)
+                Spacer(Modifier.width(9.dp))
+                Text("Streaming services", color = Color.White)
+                Spacer(Modifier.weight(1f))
+                Text("YOUTUBE · NETFLIX · MORE", color = Muted, fontSize = 9.sp)
             }
             Text("ABM AV PLAYER  •  BUILT FOR YOUR MEDIA", Modifier.fillMaxWidth(),
                 color = Muted.copy(alpha = .7f), fontSize = 9.sp, letterSpacing = 1.2.sp)
