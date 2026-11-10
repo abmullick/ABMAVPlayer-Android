@@ -5,6 +5,8 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 | Windows capability | Android implementation strategy | Status |
 |---|---|---|
 | Local audio/video playback | Media3 first; optional FFmpeg/libmpv fallback after validation | Implemented (Media3/platform codecs) |
+| Media library import and browsing | Storage Access Framework + Room | Implemented for user-imported files; automatic full-device indexing remains planned |
+| Playlist creation and membership | Room + Compose library UI | Basic implementation; M3U import/export and richer editing remain planned |
 | M3U playlist load/save | Kotlin parser/exporter + SAF document access | Planned |
 | Queue add/remove/reorder | Media3 queue; Room-backed queue persistence to follow | Partial: Media3 queue playback |
 | Shuffle and repeat | Media3 Player repeat/shuffle modes | Implemented in player UI |
