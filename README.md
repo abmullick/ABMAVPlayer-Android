@@ -57,6 +57,19 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - Google Cast SDK route picker, session lifecycle and remote play/pause/seek controls using the Default Media Receiver.
 - Casting imported SAF media through a temporary LAN HTTP server with byte-range responses; direct HTTP/HTTPS media URLs can also be sent to a Cast receiver.
 
+## Google Cast
+
+The player uses Google's Default Media Receiver and the Android Cast route picker. A Cast-compatible Chromecast, Google TV or Android TV receiver with Chromecast built-in must be available on the same reachable Wi-Fi/LAN as the phone.
+
+- Tap the Cast icon in the player header (also available in fullscreen) and choose a receiver.
+- Select an imported library item to send it to the connected receiver.
+- Use the player controls for remote play/pause and seeking. The local player is paused while remote playback is active.
+- Imported SAF files are served from the phone through a temporary, tokenized HTTP endpoint with byte-range support. The endpoint is closed when the Cast session ends or the activity is destroyed.
+- The initial implementation sends one item at a time. It does not yet transfer the complete local playlist/queue or remote subtitle/audio-track selections.
+- Google's Default Media Receiver supports a narrower set of containers/codecs than the Windows player. MP4/WebM and common audio formats are the intended starting point; MKV and unknown containers are rejected. Codec support inside a supported container still depends on the receiver.
+
+Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach the phone's temporary LAN stream. No media is uploaded to an ABM server.
+
 ## Planned milestones
 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
