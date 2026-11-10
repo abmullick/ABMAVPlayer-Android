@@ -238,6 +238,8 @@ object StreamingReceiverDiscovery {
     }
 
     private fun isPrivateAddress(host: String): Boolean {
+        // SSDP control targets must be literal IPv4 addresses; never resolve arbitrary hostnames.
+        if (!host.matches(Regex("""\\d{1,3}(?:\\.\\d{1,3}){3}"""))) return false
         val address = runCatching { InetAddress.getByName(host) }.getOrNull() as? Inet4Address ?: return false
         val bytes = address.address.map { it.toInt() and 0xff }
         return bytes[0] == 10 ||
