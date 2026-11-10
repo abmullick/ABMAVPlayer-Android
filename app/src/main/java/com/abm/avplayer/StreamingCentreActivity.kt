@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.mediarouter.app.MediaRouteButton
@@ -58,6 +61,9 @@ import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
 import com.google.android.gms.cast.MediaLoadRequestData
 import org.json.JSONObject
+import com.abm.avplayer.streaming.StreamingReceiver
+import com.abm.avplayer.streaming.StreamingReceiverDiscovery
+import kotlinx.coroutines.launch
 
 private data class StreamingProvider(val name: String, val subtitle: String, val url: String, val accent: Color)
 
@@ -88,6 +94,25 @@ class StreamingCentreActivity : ComponentActivity() {
             var pageProgress by remember { mutableIntStateOf(0) }
             var browserError by remember { mutableStateOf("") }
             var castMessage by remember { mutableStateOf("") }
+            var receiverPanel by remember { mutableStateOf(false) }
+            var receivers by remember { mutableStateOf<List<StreamingReceiver>>(emptyList()) }
+            var selectedReceiverId by remember { mutableStateOf<String?>(null) }
+            var discoveryBusy by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+
+            fun refreshReceivers() {
+                discoveryBusy = true
+                castMessage = "Searching your local network for Google Cast, DLNA and YouTube DIAL devices…"
+                scope.launch {
+                    try {
+                        receivers = StreamingReceiverDiscovery.discover(this@StreamingCentreActivity)
+                        if (selectedReceiverId !in receivers.map { it.id }) selectedReceiverId = receivers.firstOrNull()?.id
+                        castMessage = if (receivers.isEmpty()) "No DLNA or YouTube DIAL devices found. Check the same Wi-Fi." else "Found " + receivers.size + " network receiver(s)."
+                    } catch (error: Exception) {
+                        castMessage = "Device discovery failed: " + (error.message ?: "network error")
+                    } finally { discoveryBusy = false }
+                }
+            }
             SideEffect {
                 currentUrlState = { currentUrl = it }
                 titleState = { pageTitle = it }
@@ -164,8 +189,8 @@ class StreamingCentreActivity : ComponentActivity() {
                             },
                             modifier = Modifier.size(42.dp)
                         )
-                        IconButton(onClick = { requestVideoCast { castMessage = it } }, enabled = !homeMode) {
-                            Icon(Icons.Default.Cast, contentDescription = "Cast video", tint = Cyan)
+                        IconButton(onClick = { receiverPanel = true; refreshReceivers() }) {
+                            Icon(Icons.Default.Cast, contentDescription = "Find TVs", tint = Cyan)
                         }
                         IconButton(onClick = { openInBrowser() }, enabled = !homeMode && currentUrl.startsWith("https://")) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser", tint = Color.White)
