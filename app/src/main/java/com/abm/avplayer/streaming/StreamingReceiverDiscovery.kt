@@ -197,7 +197,7 @@ object StreamingReceiverDiscovery {
                 } finally { launch.disconnect() }
 
                 var screenId: String? = null
-                for (attempt in 0 until 6) {
+                for (attempt in 0 until 40) {
                     val status = openPrivateHttp(endpoint, "GET")
                     if (status != null) {
                         try {
