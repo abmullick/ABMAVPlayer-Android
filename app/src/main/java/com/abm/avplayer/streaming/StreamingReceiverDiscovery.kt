@@ -464,38 +464,6 @@ object StreamingReceiverDiscovery {
             }
         }
 
-    /**
-     * Enumerates applications exposed by the receiver's DIAL application resource.
-     * DIAL application names are receiver-defined; this is not a universal app catalogue.
-     */
-    suspend fun getDialApplications(receiver: StreamingReceiver): Result<List<DialApplicationInfo>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                require(receiver.supportsDial) { "Selected receiver does not advertise DIAL." }
-                val endpoint = URL(receiver.dialApplicationUrl ?: error("This TV has no DIAL application endpoint."))
-                require(endpoint.host.equals(receiver.address, true) && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
-                    "TV application endpoint failed the local-network safety check."
-                }
-                val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV DIAL application registry.")
-                try {
-                    val code = connection.responseCode
-                    if (code !in 200..299) error("DIAL application listing failed (HTTP $code).")
-                    val body = connection.inputStream.bufferedReader().use { it.readText().take(128_000) }
-                    val document = parseXml(body) ?: error("TV returned an invalid DIAL application listing.")
-                    val names = linkedSetOf<String>()
-                    val nodes = document.getElementsByTagNameNS("*", "name")
-                    for (index in 0 until nodes.length) {
-                        val name = nodes.item(index).textContent?.trim().orEmpty()
-                        if (name.matches(Regex("[A-Za-z0-9_. -]{1,80}"))) names.add(name)
-                    }
-                    names.map { app ->
-                        val status = getDialApplicationStatus(receiver, app).getOrNull()
-                        DialApplicationInfo(app, status?.state ?: "UNKNOWN", status?.detail ?: "Status unavailable")
-                    }
-                } finally { connection.disconnect() }
-            }
-        }
-
     suspend fun launchDialApplication(receiver: StreamingReceiver, applicationName: String, launchData: String = ""): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -519,7 +487,7 @@ object StreamingReceiverDiscovery {
                 val connection = openPrivateHttp(endpoint, "DELETE") ?: error("Could not contact the TV DIAL application.")
                 try {
                     val code = connection.responseCode
-                    if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP $code).")
+                    if (code !in 200..299) error("DIAL stop failed (HTTP $code). The app may not be exposed or running.")
                 } finally { connection.disconnect() }
                 if (applicationName.equals("YouTube", true)) youtubeSessions.remove(receiver.id)
                 Unit
@@ -534,8 +502,8 @@ object StreamingReceiverDiscovery {
                 try {
                     val code = connection.responseCode
                     if (code == 404) {
-                        // DIAL 404 means the TV answered but the requested app is not running (or not installed).
-                        return@runCatching DialApplicationStatus("STOPPED", applicationName + " app is not running")
+                        // DIAL 404 means the application name is not recognized by this TV.
+                        return@runCatching DialApplicationStatus("UNAVAILABLE", applicationName + " is not exposed by this TV")
                     }
                     if (code !in 200..299) error("DIAL status failed (HTTP $code).")
                     val body = connection.inputStream.bufferedReader().use { it.readText().take(16_384) }
