@@ -724,8 +724,11 @@ private fun PlayerScreen(
                 Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (castConnected) Text("CASTING  ·  $castDeviceName  ·  $castMessage", color = Cyan, fontSize = 10.sp,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
+                if (castConnected || (castMessage.isNotBlank() && castMessage != "Disconnected")) {
+                    Text(if (castConnected) "CASTING  ·  $castDeviceName  ·  $castMessage" else castMessage,
+                        color = if (castConnected) Cyan else Muted, fontSize = 10.sp,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
+                }
                 Slider(
                     value = progress.coerceIn(0f, 1f),
                     onValueChange = onSeek,
