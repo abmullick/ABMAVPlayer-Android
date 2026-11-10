@@ -97,9 +97,12 @@ class LocalMediaHttpServer(
             rangeHeader?.removePrefix("bytes=")?.split("-", limit = 2)?.let { range ->
                 val requestedStart = range.getOrNull(0)?.toLongOrNull()
                 val requestedEnd = range.getOrNull(1)?.toLongOrNull()
-                if (requestedStart != null) {
-                    start = requestedStart.coerceIn(0L, fileLength - 1L)
+                if (requestedStart != null && requestedStart < fileLength) {
+                    start = requestedStart
                     end = (requestedEnd ?: end).coerceIn(start, fileLength - 1L)
+                    partial = true
+                } else if (requestedStart == null && requestedEnd != null && requestedEnd > 0L) {
+                    start = (fileLength - requestedEnd).coerceAtLeast(0L)
                     partial = true
                 }
             }
