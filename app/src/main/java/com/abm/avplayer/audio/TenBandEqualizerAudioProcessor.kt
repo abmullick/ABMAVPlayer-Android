@@ -14,7 +14,7 @@ import kotlin.math.sin
 /**
  * Application-owned 10-band peaking equalizer.
  *
- * Processing is applied to decoded PCM16 audio only. Encoded passthrough is deliberately
+ * Processing is applied to decoded PCM16 or PCM-float audio. Encoded passthrough is deliberately
  * not modified; Media3 decodes supported formats to PCM before this processor receives them.
  */
 object TenBandEqSettings {
