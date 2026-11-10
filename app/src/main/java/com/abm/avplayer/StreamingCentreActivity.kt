@@ -276,8 +276,8 @@ class StreamingCentreActivity : ComponentActivity() {
                     )
                     controller.getStatus().onSuccess {
                         receiverPlaybackState = it.playbackState
-                        receiverPosition = it.positionSeconds?.toLong()?.toDlnaTimeLabel() ?: "00:00:00"
-                        receiverDuration = it.durationSeconds?.toLong()?.toDlnaTimeLabel() ?: "00:00:00"
+                        receiverPosition = it.positionSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
+                        receiverDuration = it.durationSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
                     }
                     receiverControlBusy = false
                 }
