@@ -44,7 +44,10 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.abm.avplayer.casting.LocalMediaHttpServer
+import com.abm.avplayer.casting.LocalCastMediaSource
+import com.abm.avplayer.casting.LocalMediaQueueHttpServer
 import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaQueueItem
 import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
 import com.google.android.gms.cast.MediaStatus
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -72,6 +75,7 @@ class MainActivity : ComponentActivity() {
     private var castContext: CastContext? = null
     private var castListener: SessionManagerListener<CastSession>? = null
     private var localCastServer: LocalMediaHttpServer? = null
+    private var localCastQueueServer: LocalMediaQueueHttpServer? = null
     private val castConnectedState = mutableStateOf(false)
     private val castDeviceNameState = mutableStateOf("")
     private val castMessageState = mutableStateOf("")
@@ -214,7 +218,7 @@ class MainActivity : ComponentActivity() {
                             onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
                             onPlay = { selected ->
                                 if (castContext?.sessionManager?.currentCastSession != null) {
-                                    castMedia(selected.uri, selected.title, selected.mimeType)
+                                    castLibraryQueue(library, selected)
                                     page = "player"
                                 } else controller?.let { player ->
                                     val queue = library.map(::toMediaItem)
@@ -262,8 +266,10 @@ class MainActivity : ComponentActivity() {
                                     else remote.play()
                                 } else controller?.let { if (it.isPlaying) it.pause() else it.play() }
                             },
-                            onPrevious = { if (!castConnected) controller?.seekToPreviousMediaItem() },
-                            onNext = { if (!castConnected) controller?.seekToNextMediaItem() },
+                            onPrevious = { if (castConnected) castContext?.sessionManager?.currentCastSession?.remoteMediaClient?.queuePrev(null)
+                                else controller?.seekToPreviousMediaItem() },
+                            onNext = { if (castConnected) castContext?.sessionManager?.currentCastSession?.remoteMediaClient?.queueNext(null)
+                                else controller?.seekToNextMediaItem() },
                             onSeek = { value ->
                                 progress = value
                                 val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
@@ -351,6 +357,8 @@ class MainActivity : ComponentActivity() {
                     castMessageState.value = "Disconnected"
                     localCastServer?.close()
                     localCastServer = null
+                    localCastQueueServer?.close()
+                    localCastQueueServer = null
                 }
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
                     castMessageState.value = "Could not connect to TV (error $error)"
@@ -361,6 +369,8 @@ class MainActivity : ComponentActivity() {
                     castMessageState.value = "Could not restore the Cast session (error $error)"
                     localCastServer?.close()
                     localCastServer = null
+                    localCastQueueServer?.close()
+                    localCastQueueServer = null
                 }
                 override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
                 override fun onSessionEnding(session: CastSession) { castMessageState.value = "Disconnecting…" }
@@ -376,6 +386,80 @@ class MainActivity : ComponentActivity() {
             }
         }.onFailure {
             castMessageState.value = "Google Play services / Cast unavailable"
+        }
+    }
+
+    private fun castLibraryQueue(library: List<MediaFileEntity>, selected: MediaFileEntity) {
+        val session = castContext?.sessionManager?.currentCastSession ?: return
+        runCatching {
+            val supported = library.mapNotNull { file ->
+                val uri = Uri.parse(file.uri)
+                val mime = file.mimeType?.takeUnless { it == "application/octet-stream" }
+                    ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
+                    ?: mimeFromName(uri.lastPathSegment)
+                if (mime == "application/octet-stream" || mime == "video/x-matroska") null
+                else Triple(file, uri, mime)
+            }
+            require(supported.isNotEmpty()) { "No Cast-compatible media found in this library" }
+            val selectedIndex = supported.indexOfFirst { it.first.uri == selected.uri }
+            require(selectedIndex >= 0) { "The selected item is not supported by the Cast receiver" }
+
+            localCastServer?.close()
+            localCastServer = null
+            localCastQueueServer?.close()
+            localCastQueueServer = null
+
+            val localSources = supported.filter { it.second.scheme != "http" && it.second.scheme != "https" }
+                .mapIndexed { index, item ->
+                    LocalCastMediaSource("item$index", item.second, item.third)
+                }
+            val queueServer = if (localSources.isNotEmpty()) {
+                LocalMediaQueueHttpServer(contentResolver, localSources).also { localCastQueueServer = it }
+                    .also { it.start() }
+            } else null
+
+            val queueItems = supported.mapIndexed { index, (file, uri, mime) ->
+                val mediaUrl = if (uri.scheme == "http" || uri.scheme == "https") uri.toString()
+                    else queueServer?.urlFor("item$index")
+                        ?: error("Could not create a local Cast stream for ${file.title}")
+                val metadataType = if (mime.startsWith("audio/")) CastMediaMetadata.MEDIA_TYPE_MUSIC_TRACK
+                    else CastMediaMetadata.MEDIA_TYPE_MOVIE
+                val metadata = CastMediaMetadata(metadataType).apply {
+                    putString(CastMediaMetadata.KEY_TITLE, file.title)
+                }
+                val info = MediaInfo.Builder(mediaUrl)
+                    .setContentType(mime)
+                    .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                    .setMetadata(metadata)
+                    .build()
+                MediaQueueItem.Builder(info).setAutoplay(true).setPreloadTime(20.0).build()
+            }
+
+            controllerState.value?.pause()
+            val remote = session.remoteMediaClient
+                ?: error("TV connected, but remote playback is unavailable")
+            castMessageState.value = "Sending ${queueItems.size} items to ${session.castDevice?.friendlyName ?: "TV"}…"
+            remote.queueLoad(
+                queueItems.toTypedArray(),
+                selectedIndex,
+                MediaStatus.REPEAT_MODE_REPEAT_OFF,
+                0L,
+                null
+            ).setResultCallback { result ->
+                castMessageState.value = if (result.status.isSuccess) {
+                    "Playing library queue on ${session.castDevice?.friendlyName ?: "TV"}"
+                } else {
+                    localCastQueueServer?.close()
+                    localCastQueueServer = null
+                    "TV could not load the queue (Cast error ${result.status.statusCode})"
+                }
+            }
+            val skipped = library.size - supported.size
+            if (skipped > 0) castMessageState.value = "Sending ${supported.size} compatible items; skipped $skipped unsupported file(s)"
+        }.onFailure {
+            localCastQueueServer?.close()
+            localCastQueueServer = null
+            castMessageState.value = "Cast queue failed: ${it.message}"
         }
     }
 
@@ -449,6 +533,8 @@ class MainActivity : ComponentActivity() {
         castListener = null
         localCastServer?.close()
         localCastServer = null
+        localCastQueueServer?.close()
+        localCastQueueServer = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controllerState.value = null
@@ -647,14 +733,14 @@ private fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth()) {
                     Text(formatTime(position), color = Muted, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onPrevious, enabled = !castConnected) {
+                        IconButton(onClick = onPrevious, enabled = true) {
                             Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
                         }
                         IconButton(onClick = onPlayPause) {
                             Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (playing) "Pause" else "Play", tint = Cyan)
                         }
-                        IconButton(onClick = onNext, enabled = !castConnected) {
+                        IconButton(onClick = onNext, enabled = true) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                         }
                         AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
@@ -749,7 +835,7 @@ private fun PlayerScreen(
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
                             tint = if (player?.shuffleModeEnabled == true) Cyan else Muted)
                     }
-                    IconButton(onClick = onPrevious, enabled = !castConnected) {
+                    IconButton(onClick = onPrevious, enabled = true) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
                             tint = Color.White, modifier = Modifier.size(30.dp))
                     }
@@ -762,7 +848,7 @@ private fun PlayerScreen(
                             tint = Canvas, modifier = Modifier.size(34.dp))
                     }
                     Spacer(Modifier.width(12.dp))
-                    IconButton(onClick = onNext, enabled = !castConnected) {
+                    IconButton(onClick = onNext, enabled = true) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next",
                             tint = Color.White, modifier = Modifier.size(30.dp))
                     }
