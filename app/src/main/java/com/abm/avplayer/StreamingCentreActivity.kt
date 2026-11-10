@@ -623,8 +623,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         val parsedIntent = runCatching {
                             Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
                         }.getOrNull() ?: return true
-                        val providerPackage = parsedIntent.getPackage()
-                        if (providerPackage !in allowedProviderAppPackages) return true
+                        val providerPackage = parsedIntent.getPackage()?.takeIf { it in allowedProviderAppPackages } ?: return true
                         val targetUri = parsedIntent.data ?: return true
                         val safeIntent = Intent(Intent.ACTION_VIEW, targetUri).apply {
                             setPackage(providerPackage)
@@ -642,7 +641,7 @@ class StreamingCentreActivity : ComponentActivity() {
                     }
                     if (uri.scheme.equals("market", true)) {
                         val providerPackage = uri.getQueryParameter("id")
-                        if (providerPackage in allowedProviderAppPackages) {
+                        if (providerPackage != null && providerPackage in allowedProviderAppPackages) {
                             runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
                         }
                         return true
