@@ -17,7 +17,7 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 | Subtitle track selection | Media3 text tracks | Implemented for selectable embedded tracks, including Off |
 | External subtitle files | SAF + MediaItem subtitle configuration | Implemented for SRT, WebVTT and SSA/ASS sidecar files; device/decoder parser support applies |
 | 10-band EQ and presets | App-owned Media3 PCM AudioProcessor with ten peaking biquad filters | Implemented: 31 Hz–16 kHz bands, ±12 dB, persistent settings and seven presets. Applies to decoded PCM; encoded passthrough is not processed |
-| Preamp / EQ headroom | App-owned PCM DSP | Implemented: persistent ±12 dB preamp and automatic headroom offset based on cumulative positive EQ-band gain |
+| Preamp / EQ headroom | App-owned PCM DSP | Implemented: persistent ±12 dB preamp and automatic headroom offset based on largest positive EQ-band gain |
 | Dynamic-range compressor | App-owned PCM DSP | Initial implementation: adjustable threshold, ratio, attack/release and make-up gain; requires listening and device validation |
 | ReplayGain loudness normalisation | Parse track/album ReplayGain metadata and apply gain in PCM pipeline | Planned; metadata parsing and album-vs-track policy are not implemented |
 | Animated audio visualizer | Audio-session/PCM analysis where legally and technically supported | Planned |
