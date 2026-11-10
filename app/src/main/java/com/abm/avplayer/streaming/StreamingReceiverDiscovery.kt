@@ -260,6 +260,84 @@ object StreamingReceiverDiscovery {
             }
         }
 
+    suspend fun getYoutubeLoungePlaybackStatus(receiver: StreamingReceiver): Result<YoutubeLoungePlaybackStatus> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val session = youtubeSessions[receiver.id] ?: error("YouTube remote control is not paired.")
+                val query = "name=ABM%20AV%20Player" +
+                    "&loungeIdToken=" + formEncode(session.token) +
+                    "&SID=" + formEncode(session.sid) +
+                    "&AID=" + formEncode(session.lastEventId ?: "0") +
+                    "&gsessionid=" + formEncode(session.gsessionId) +
+                    "&device=REMOTE_CONTROL&app=youtube-desktop&VER=8&v=2&RID=rpc&CI=0&TYPE=xmlhttp"
+                val url = URL("https://www.youtube.com/api/lounge/bc/bind?" + query)
+                val connection = url.openConnection() as? javax.net.ssl.HttpsURLConnection
+                    ?: error("Could not open YouTube playback-status channel.")
+                try {
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = 4_000
+                    connection.readTimeout = 3_500
+                    connection.instanceFollowRedirects = false
+                    connection.setRequestProperty("User-Agent", "ABM-AV-Player-Android/1.0")
+                    val code = connection.responseCode
+                    if (code !in 200..299) error("YouTube status channel failed (HTTP " + code + ").")
+                    val reader = connection.inputStream.bufferedReader()
+                    try {
+                        var framesRead = 0
+                        while (framesRead < 4) {
+                            val lengthLine = try { reader.readLine() } catch (_: java.net.SocketTimeoutException) { null } ?: break
+                            val frameLength = lengthLine.trim().toIntOrNull() ?: continue
+                            if (frameLength <= 0 || frameLength > 1_048_576) continue
+                            val frame = StringBuilder()
+                            var consumed = 0
+                            while (consumed < frameLength) {
+                                val line = try { reader.readLine() } catch (_: java.net.SocketTimeoutException) { null } ?: break
+                                if (frame.isNotEmpty()) frame.append(10.toChar())
+                                frame.append(line)
+                                consumed += line.length + 1
+                            }
+                            if (frame.isNotEmpty()) {
+                                applyYoutubeLoungeFrame(frame.toString(), session)
+                                framesRead++
+                                if (session.state != "UNKNOWN") break
+                            }
+                        }
+                    } finally { reader.close() }
+                    YoutubeLoungePlaybackStatus(session.state, session.currentTimeSeconds, session.durationSeconds, session.videoId)
+                } finally { connection.disconnect() }
+            }
+        }
+
+    private fun applyYoutubeLoungeFrame(frame: String, session: YoutubeLoungeSession) {
+        val events = runCatching { JSONArray(frame) }.getOrNull() ?: return
+        for (index in 0 until events.length()) {
+            val event = events.optJSONArray(index) ?: continue
+            val eventId = event.optString(0).takeIf { it.isNotBlank() }
+            if (eventId != null) session.lastEventId = eventId
+            val payload = event.optJSONArray(1) ?: continue
+            when (payload.optString(0)) {
+                "nowPlaying", "onStateChange" -> {
+                    val data = payload.optJSONObject(1) ?: continue
+                    val rawState = data.optString("state", "")
+                    if (rawState.isNotBlank()) {
+                        session.state = when (rawState) {
+                            "1" -> "PLAYING"
+                            "2" -> "PAUSED"
+                            "3" -> "BUFFERING"
+                            "0" -> "ENDED"
+                            "-1" -> "IDLE"
+                            else -> rawState.uppercase()
+                        }
+                    }
+                    session.currentTimeSeconds = data.optDouble("currentTime", session.currentTimeSeconds).coerceAtLeast(0.0)
+                    session.durationSeconds = data.optDouble("duration", session.durationSeconds).coerceAtLeast(0.0)
+                    val video = data.optString("videoId", "")
+                    if (video.isNotBlank()) session.videoId = video
+                }
+                "loungeScreenDisconnected" -> session.state = "DISCONNECTED"
+            }
+        }
+    }
     suspend fun closeDialYoutube(receiver: StreamingReceiver): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
