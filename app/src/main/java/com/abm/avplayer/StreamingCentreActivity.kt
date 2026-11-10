@@ -220,6 +220,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             if (it.message?.contains("not paired", true) == true ||
                                 it.message?.contains("HTTP 401", true) == true ||
                                 it.message?.contains("HTTP 410", true) == true ||
+                                it.message?.contains("HTTP 400", true) == true ||
                                 it.message?.contains("Unknown SID", true) == true) {
                                 StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
@@ -241,7 +242,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         .onSuccess { youtubeRemotePlaybackState = "Updating…"; castMessage = "YouTube seek sent to " + receiver.name }
                         .onFailure {
                             castMessage = "YouTube seek failed: " + (it.message ?: "receiver error")
-                            if (it.message?.contains("HTTP 401", true) == true || it.message?.contains("HTTP 410", true) == true) {
+                            if (it.message?.contains("HTTP 401", true) == true || it.message?.contains("HTTP 410", true) == true || it.message?.contains("HTTP 400", true) == true || it.message?.contains("Unknown SID", true) == true) {
                                 StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
@@ -510,7 +511,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     if (receiver.supportsDial) Text("YouTube playback: " + youtubeRemotePlaybackState + "  ·  " + formatStreamingTime(youtubeRemotePosition) + " / " + formatStreamingTime(youtubeRemoteDuration), color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
-                                TextButton(onClick = { activeReceiver = null; youtubeRemoteReady = false; youtubeRemotePlaybackState = "Not paired"; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
+                                TextButton(onClick = { StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver); activeReceiver = null; youtubeRemoteReady = false; youtubeRemotePlaybackState = "Not paired"; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (receiver.supportsDlna) {
