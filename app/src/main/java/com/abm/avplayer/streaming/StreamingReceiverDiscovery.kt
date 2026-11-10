@@ -31,6 +31,9 @@ data class StreamingReceiver(
         ).joinToString(" + ")
 }
 
+data class DlnaPlaybackStatus(val state: String, val position: String, val duration: String)
+data class DialApplicationStatus(val state: String, val detail: String)
+
 object StreamingReceiverDiscovery {
     private const val SSDP_ADDRESS = "239.255.255.250"
     private const val SSDP_PORT = 1900
@@ -189,7 +192,91 @@ object StreamingReceiverDiscovery {
             }
         }
 
-    private fun soap(endpoint: URL, serviceType: String, action: String, arguments: String) {
+
+    suspend fun getDlnaPlaybackStatus(receiver: StreamingReceiver): Result<DlnaPlaybackStatus> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = checkedControlEndpoint(receiver)
+                val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
+                val transport = parseXml(soap(endpoint, serviceType, "GetTransportInfo", "<InstanceID>0</InstanceID>"))
+                    ?: error("TV returned an invalid transport status.")
+                val position = parseXml(soap(endpoint, serviceType, "GetPositionInfo", "<InstanceID>0</InstanceID>"))
+                DlnaPlaybackStatus(
+                    state = firstText(transport.documentElement, "CurrentTransportState") ?: "UNKNOWN",
+                    position = position?.let { firstText(it.documentElement, "RelTime") } ?: "00:00:00",
+                    duration = position?.let { firstText(it.documentElement, "TrackDuration") } ?: "00:00:00"
+                )
+            }
+        }
+
+    suspend fun controlDlna(receiver: StreamingReceiver, action: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(action in setOf("Play", "Pause", "Stop")) { "Unsupported DLNA transport command." }
+                val endpoint = checkedControlEndpoint(receiver)
+                val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
+                val args = if (action == "Play") "<InstanceID>0</InstanceID><Speed>1</Speed>" else "<InstanceID>0</InstanceID>"
+                soap(endpoint, serviceType, action, args)
+            }
+        }
+
+    suspend fun seekDlna(receiver: StreamingReceiver, target: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(target.matches(Regex("""\d{2,}:\d{2}:\d{2}"""))) { "Invalid seek position." }
+                val endpoint = checkedControlEndpoint(receiver)
+                val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
+                soap(endpoint, serviceType, "Seek", "<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>$target</Target>")
+            }
+        }
+
+    suspend fun getDialApplicationStatus(receiver: StreamingReceiver): Result<DialApplicationStatus> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialYoutubeEndpoint(receiver)
+                val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV YouTube app.")
+                try {
+                    val code = connection.responseCode
+                    val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader()?.use { it.readText().take(16_384) }.orEmpty()
+                    if (code !in 200..299) error("DIAL status failed (HTTP $code).")
+                    val xml = parseXml(body)
+                    val state = xml?.documentElement?.getAttribute("state")?.takeIf { it.isNotBlank() } ?: "RUNNING"
+                    DialApplicationStatus(state, xml?.documentElement?.let { firstText(it, "name") ?: firstText(it, "link") } ?: "YouTube app")
+                } finally { connection.disconnect() }
+            }
+        }
+
+    suspend fun stopDialYoutube(receiver: StreamingReceiver): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialYoutubeEndpoint(receiver)
+                val connection = openPrivateHttp(endpoint, "DELETE") ?: error("Could not contact the TV YouTube app.")
+                try {
+                    val code = connection.responseCode
+                    if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP $code).")
+                } finally { connection.disconnect() }
+            }
+        }
+
+    private fun checkedControlEndpoint(receiver: StreamingReceiver): URL {
+        val endpoint = URL(receiver.avTransportControlUrl ?: error("This TV has no DLNA AVTransport endpoint."))
+        require(endpoint.host == receiver.address && isPrivateAddress(endpoint.host)) {
+            "TV control endpoint failed the local-network safety check."
+        }
+        return endpoint
+    }
+
+    private fun dialYoutubeEndpoint(receiver: StreamingReceiver): URL {
+        val base = receiver.dialApplicationUrl ?: error("This TV has no DIAL application endpoint.")
+        val endpoint = URL(URL(base), "YouTube")
+        require(endpoint.host == receiver.address && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
+            "TV application endpoint failed the local-network safety check."
+        }
+        return endpoint
+    }
+
+    private fun soap(endpoint: URL, serviceType: String, action: String, arguments: String): String {
         val connection = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the DLNA TV.")
         val envelope = """<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:$action xmlns:u="${xmlEscape(serviceType)}">$arguments</u:$action></s:Body></s:Envelope>"""
         try {
@@ -197,10 +284,12 @@ object StreamingReceiverDiscovery {
             connection.setRequestProperty("SOAPAction", "\"$serviceType#$action\"")
             connection.doOutput = true
             connection.outputStream.use { it.write(envelope.toByteArray(StandardCharsets.UTF_8)) }
-            if (connection.responseCode !in 200..299) {
+            val code = connection.responseCode
+            if (code !in 200..299) {
                 val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText().take(400) } }.getOrNull()
-                error("DLNA $action failed (HTTP ${connection.responseCode})${detail?.let { ": $it" } ?: ""}.")
+                error("DLNA $action failed (HTTP $code)${detail?.let { ": $it" } ?: ""}.")
             }
+            return connection.inputStream.bufferedReader().use { it.readText().take(32_768) }
         } finally {
             connection.disconnect()
         }
