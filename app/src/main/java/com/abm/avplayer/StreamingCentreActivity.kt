@@ -325,28 +325,50 @@ class StreamingCentreActivity : ComponentActivity() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "  ·  DIAL app", color = Muted, fontSize = 10.sp)
+                                    Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
+                                    Text("Playback: " + receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "  ·  DIAL app", color = Muted, fontSize = 10.sp)
                                 }
-                                TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
+                                TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
+                                TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (receiver.supportsDlna) {
-                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy) { Text("-30s", color = Cyan) }
-                                    TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy) { Text("Play", color = Cyan) }
-                                    TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy) { Text("Pause", color = Cyan) }
-                                    TextButton(onClick = { controlSelectedReceiver("Stop") }, enabled = !receiverControlBusy) { Text("Stop", color = Cyan) }
-                                    TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy) { Text("+30s", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("-30s", color = Cyan) }
+                                    if (receiverPlaybackState.equals("PLAYING", true)) {
+                                        TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Pause", color = Cyan) }
+                                    } else {
+                                        TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Resume / Play", color = Cyan) }
+                                    }
+                                    TextButton(onClick = { controlSelectedReceiver("Stop") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Stop", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("+30s", color = Cyan) }
                                 } else if (receiver.supportsDial) {
                                     TextButton(onClick = {
-                                        scope.launch {
-                                            StreamingReceiverDiscovery.stopDialYoutube(receiver).onSuccess {
-                                                castMessage = "YouTube app stopped on " + receiver.name
-                                            }.onFailure {
-                                                castMessage = "Stop failed: " + (it.message ?: "receiver error")
+                                        val videoId = currentYoutubeVideoId()
+                                        if (videoId != null) {
+                                            receiverControlBusy = true
+                                            scope.launch {
+                                                StreamingReceiverDiscovery.launchYoutubeOnDial(receiver, videoId)
+                                                    .onSuccess { receiverPlaybackState = "RUNNING"; receiverConnectionState = "Connected"; castMessage = "YouTube relaunched on " + receiver.name }
+                                                    .onFailure { castMessage = "Launch failed: " + (it.message ?: "receiver error") }
+                                                receiverControlBusy = false
                                             }
                                         }
-                                    }) { Text("Stop YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && currentYoutubeVideoId() != null) { Text("Launch / Resume", color = Cyan) }
+                                    TextButton(onClick = {
+                                        receiverControlBusy = true
+                                        scope.launch {
+                                            StreamingReceiverDiscovery.stopDialYoutube(receiver).onSuccess {
+                                                receiverPlaybackState = "STOPPED"
+                                                receiverConnectionState = "Connected"
+                                                castMessage = "YouTube app stopped on " + receiver.name
+                                            }.onFailure { castMessage = "Stop failed: " + (it.message ?: "receiver error") }
+                                            receiverControlBusy = false
+                                        }
+                                    }, enabled = !receiverControlBusy) { Text("Stop YouTube", color = Cyan) }
                                 }
+                            }
+                            if (receiver.supportsDial && !receiver.supportsDlna) {
+                                Text("DIAL supports app launch, status and stop. Generic pause/resume is not part of the DIAL protocol; use the TV remote or the provider's own Cast controls.", color = Muted, fontSize = 10.sp)
                             }
                         }
                     }
