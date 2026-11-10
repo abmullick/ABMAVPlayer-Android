@@ -200,17 +200,17 @@ class StreamingCentreActivity : ComponentActivity() {
                             receiverConnectionState = "Connected"
                             castMessage = "Reconnected to " + refreshed.name
                             if (refreshed.supportsDlna) {
-                                StreamingReceiverDiscovery.getDlnaPlaybackStatus(refreshed).onSuccess {
-                                    receiverPlaybackState = it.state
-                                    receiverPosition = it.position
-                                    receiverDuration = it.duration
+                                DlnaReceiverControl(refreshed).getStatus().onSuccess {
+                                    receiverPlaybackState = it.playbackState
+                                    receiverPosition = it.positionSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
+                                    receiverDuration = it.durationSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
                                 }.onFailure { receiverPlaybackState = "DLNA status unavailable" }
                             }
                             if (refreshed.supportsDial) {
-                                StreamingReceiverDiscovery.getDialApplicationStatus(refreshed).onSuccess {
-                                    receiverDialAppState = it.state
-                                    if (!refreshed.supportsDlna) receiverPlaybackState = it.state
-                                    if (it.state.equals("STOPPED", true)) {
+                                DialApplicationReceiverControl(refreshed, "YouTube").getStatus().onSuccess {
+                                    receiverDialAppState = it.playbackState
+                                    if (!refreshed.supportsDlna) receiverPlaybackState = it.playbackState
+                                    if (it.playbackState.equals("STOPPED", true)) {
                                         StreamingReceiverDiscovery.clearYoutubeRemoteSession(refreshed)
                                         youtubeRemoteReady = false
                                         youtubeRemotePlaybackState = "Not paired"
@@ -362,17 +362,17 @@ class StreamingCentreActivity : ComponentActivity() {
                 while (activeReceiver?.id == receiverId) {
                     val receiver = activeReceiver ?: break
                     val dlnaOk = if (receiver.supportsDlna) {
-                        StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
-                            receiverPlaybackState = it.state
-                            receiverPosition = it.position
-                            receiverDuration = it.duration
+                        DlnaReceiverControl(receiver).getStatus().onSuccess {
+                            receiverPlaybackState = it.playbackState
+                            receiverPosition = it.positionSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
+                            receiverDuration = it.durationSeconds?.let { seconds -> formatStreamingTime(seconds) } ?: "00:00:00"
                         }.isSuccess
                     } else false
                     val dialOk = if (receiver.supportsDial) {
-                        StreamingReceiverDiscovery.getDialApplicationStatus(receiver).onSuccess {
-                            receiverDialAppState = it.state
-                            if (!receiver.supportsDlna) receiverPlaybackState = it.state
-                            if (it.state.equals("STOPPED", true)) {
+                        DialApplicationReceiverControl(receiver, "YouTube").getStatus().onSuccess {
+                            receiverDialAppState = it.playbackState
+                            if (!receiver.supportsDlna) receiverPlaybackState = it.playbackState
+                            if (it.playbackState.equals("STOPPED", true)) {
                                 StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
@@ -380,12 +380,12 @@ class StreamingCentreActivity : ComponentActivity() {
                         }.isSuccess
                     } else false
                     if (youtubeRemoteReady && receiver.supportsDial) {
-                        StreamingReceiverDiscovery.getYoutubeLoungePlaybackStatus(receiver).onSuccess {
-                            youtubeRemotePlaybackState = it.state
-                            youtubeRemotePosition = it.currentTimeSeconds
-                            youtubeRemoteDuration = it.durationSeconds
-                            youtubeRemoteVideoId = it.videoId
-                            if (it.state == "DISCONNECTED") {
+                        YoutubeLoungeReceiverControl(receiver).getStatus().onSuccess {
+                            youtubeRemotePlaybackState = it.playbackState
+                            youtubeRemotePosition = it.positionSeconds ?: 0.0
+                            youtubeRemoteDuration = it.durationSeconds ?: 0.0
+                            youtubeRemoteVideoId = it.title.orEmpty()
+                            if (it.connectionState == "Disconnected") {
                                 StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                             }
@@ -438,9 +438,18 @@ class StreamingCentreActivity : ComponentActivity() {
                             MediaStatus.PLAYER_STATE_IDLE -> "Idle"
                             else -> "Connected"
                         }
-                        castRemoteTitle = remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE).orEmpty()
-                        castRemotePosition = remote.approximateStreamPosition.coerceAtLeast(0L)
-                        castRemoteDuration = remote.streamDuration.coerceAtLeast(0L)
+                        GoogleCastReceiverControl(remote).getStatus().onSuccess {
+                            castRemoteState = when (it.playbackState) {
+                                "PLAYING" -> "Playing"
+                                "PAUSED" -> "Paused"
+                                "BUFFERING" -> "Buffering"
+                                "IDLE" -> "Idle"
+                                else -> "Connected"
+                            }
+                            castRemoteTitle = it.title.orEmpty()
+                            castRemotePosition = ((it.positionSeconds ?: 0.0) * 1000.0).toLong()
+                            castRemoteDuration = ((it.durationSeconds ?: 0.0) * 1000.0).toLong()
+                        }
                     } else {
                         castRemoteConnected = false
                         castRemoteState = "Disconnected"
