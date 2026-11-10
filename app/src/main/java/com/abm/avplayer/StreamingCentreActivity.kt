@@ -217,7 +217,10 @@ class StreamingCentreActivity : ComponentActivity() {
                         }
                         .onFailure {
                             castMessage = "YouTube remote control failed: " + (it.message ?: "receiver error")
-                            if (it.message?.contains("not paired", true) == true) {
+                            if (it.message?.contains("not paired", true) == true ||
+                                it.message?.contains("HTTP 401", true) == true ||
+                                it.message?.contains("HTTP 410", true) == true ||
+                                it.message?.contains("Unknown SID", true) == true) {
                                 StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
@@ -236,7 +239,14 @@ class StreamingCentreActivity : ComponentActivity() {
                 scope.launch {
                     StreamingReceiverDiscovery.seekYoutubeLounge(receiver, target)
                         .onSuccess { youtubeRemotePlaybackState = "Updating…"; castMessage = "YouTube seek sent to " + receiver.name }
-                        .onFailure { castMessage = "YouTube seek failed: " + (it.message ?: "receiver error") }
+                        .onFailure {
+                            castMessage = "YouTube seek failed: " + (it.message ?: "receiver error")
+                            if (it.message?.contains("HTTP 401", true) == true || it.message?.contains("HTTP 410", true) == true) {
+                                StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
+                                youtubeRemoteReady = false
+                                youtubeRemotePlaybackState = "Not paired"
+                            }
+                        }
                     receiverControlBusy = false
                 }
             }
