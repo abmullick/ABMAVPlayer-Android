@@ -355,6 +355,13 @@ class MainActivity : ComponentActivity() {
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
                     castMessageState.value = "Could not connect to TV (error $error)"
                 }
+                override fun onSessionResumeFailed(session: CastSession, error: Int) {
+                    castConnectedState.value = false
+                    castDeviceNameState.value = ""
+                    castMessageState.value = "Could not restore the Cast session (error $error)"
+                    localCastServer?.close()
+                    localCastServer = null
+                }
                 override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
                 override fun onSessionEnding(session: CastSession) { castMessageState.value = "Disconnecting…" }
                 override fun onSessionResuming(session: CastSession, sessionId: String) { castMessageState.value = "Reconnecting…" }
@@ -362,6 +369,11 @@ class MainActivity : ComponentActivity() {
             }
             castListener = listener
             context.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+            context.sessionManager.currentCastSession?.let { active ->
+                castConnectedState.value = true
+                castDeviceNameState.value = active.castDevice?.friendlyName.orEmpty()
+                castMessageState.value = "Connected"
+            }
         }.onFailure {
             castMessageState.value = "Google Play services / Cast unavailable"
         }
