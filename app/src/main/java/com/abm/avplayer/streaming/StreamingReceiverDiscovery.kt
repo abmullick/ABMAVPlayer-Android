@@ -254,6 +254,7 @@ object StreamingReceiverDiscovery {
                     if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP " + code + ").")
                 } finally { connection.disconnect() }
                 youtubeSessions.remove(receiver.id)
+                Unit
             }
         }
 
