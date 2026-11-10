@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.mediarouter.app.MediaRouteButton
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
@@ -42,6 +43,17 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.abm.avplayer.casting.LocalMediaHttpServer
+import com.google.android.gms.cast.CastMediaControlIntent
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
+import com.google.android.gms.cast.MediaStatus
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaSeekOptions
 import com.abm.avplayer.data.MediaDatabase
 import com.abm.avplayer.data.MediaFileEntity
 import com.abm.avplayer.data.MediaLibraryRepository
@@ -58,11 +70,18 @@ private val Violet = Color(0xFF9A7BFF)
 private val Muted = Color(0xFF929BAE)
 
 class MainActivity : ComponentActivity() {
+    private var castContext: CastContext? = null
+    private var castListener: SessionManagerListener<CastSession>? = null
+    private var localCastServer: LocalMediaHttpServer? = null
+    private val castConnectedState = mutableStateOf(false)
+    private val castDeviceNameState = mutableStateOf("")
+    private val castMessageState = mutableStateOf("")
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupCast()
         val token = SessionToken(this, ComponentName(this, com.abm.avplayer.playback.PlayerService::class.java))
         controllerFuture = MediaController.Builder(this, token).buildAsync()
         controllerFuture?.let { future ->
@@ -89,6 +108,9 @@ class MainActivity : ComponentActivity() {
             var playing by remember { mutableStateOf(false) }
             var title by remember { mutableStateOf("Nothing playing") }
             var fullscreen by remember { mutableStateOf(false) }
+            val castConnected by castConnectedState
+            val castDeviceName by castDeviceNameState
+            val castMessage by castMessageState
 
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenMultipleDocuments()
@@ -163,10 +185,19 @@ class MainActivity : ComponentActivity() {
                 active.addListener(listener)
                 try {
                     while (true) {
-                        position = active.currentPosition.coerceAtLeast(0L)
-                        duration = active.duration.coerceAtLeast(0L)
-                        playing = active.isPlaying
-                        if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
+                        val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
+                        if (remote != null) {
+                            val status = remote.mediaStatus
+                            playing = status?.playerState == MediaStatus.PLAYER_STATE_PLAYING
+                            position = remote.approximateStreamPosition.coerceAtLeast(0L)
+                            duration = remote.streamDuration.coerceAtLeast(0L)
+                            if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
+                        } else {
+                            position = active.currentPosition.coerceAtLeast(0L)
+                            duration = active.duration.coerceAtLeast(0L)
+                            playing = active.isPlaying
+                            if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
+                        }
                         delay(500)
                     }
                 } finally {
@@ -183,7 +214,10 @@ class MainActivity : ComponentActivity() {
                             onBack = { page = "player" },
                             onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
                             onPlay = { selected ->
-                                controller?.let { player ->
+                                if (castContext?.sessionManager?.currentCastSession != null) {
+                                    castMedia(selected.uri, selected.title, selected.mimeType)
+                                    page = "player"
+                                } else controller?.let { player ->
                                     val queue = library.map(::toMediaItem)
                                     val index = library.indexOfFirst { it.uri == selected.uri }.coerceAtLeast(0)
                                     player.setMediaItems(queue, index, 0L)
@@ -216,17 +250,27 @@ class MainActivity : ComponentActivity() {
                     } else {
                         PlayerScreen(
                             title = title, player = controller,
+                            castConnected = castConnected, castDeviceName = castDeviceName, castMessage = castMessage,
+                            onCast = { openCastPicker() },
                             hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
                             progress = progress,
                             onBrowse = { picker.launch(arrayOf("audio/*", "video/*")) },
                             onLibrary = { page = "library" },
-                            onPlayPause = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
-                            onPrevious = { controller?.seekToPreviousMediaItem() },
-                            onNext = { controller?.seekToNextMediaItem() },
+                            onPlayPause = {
+                                val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
+                                if (remote != null) {
+                                    if (remote.mediaStatus?.playerState == MediaStatus.PLAYER_STATE_PLAYING) remote.pause()
+                                    else remote.play()
+                                } else controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                            },
+                            onPrevious = { if (!castConnected) controller?.seekToPreviousMediaItem() },
+                            onNext = { if (!castConnected) controller?.seekToNextMediaItem() },
                             onSeek = { value ->
                                 progress = value
-                                if (duration > 0L) controller?.seekTo((duration * value).toLong())
+                                val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
+                                if (remote != null && duration > 0L) remote.seek(MediaSeekOptions.Builder().setPosition((duration * value).toLong()).build())
+                                else if (duration > 0L) controller?.seekTo((duration * value).toLong())
                             },
                             onShuffle = { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } },
                             onRepeat = {
@@ -285,12 +329,124 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun setupCast() {
+        runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
+            castContext = context
+            val listener = object : SessionManagerListener<CastSession> {
+                override fun onSessionStarted(session: CastSession, sessionId: String) {
+                    castConnectedState.value = true
+                    castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
+                    castMessageState.value = "Connected"
+                    val item = controllerState.value?.currentMediaItem
+                    val uri = item?.localConfiguration?.uri?.toString()
+                    if (uri != null) castMedia(uri, item.mediaMetadata.title?.toString() ?: "ABM AV Player", contentResolver.getType(Uri.parse(uri)))
+                    else castMessageState.value = "Connected · select media to cast"
+                }
+                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                    castConnectedState.value = true
+                    castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
+                    castMessageState.value = "Reconnected"
+                }
+                override fun onSessionEnded(session: CastSession, error: Int) {
+                    castConnectedState.value = false
+                    castDeviceNameState.value = ""
+                    castMessageState.value = "Disconnected"
+                    localCastServer?.close()
+                    localCastServer = null
+                }
+                override fun onSessionStartFailed(session: CastSession, error: Int) {
+                    castMessageState.value = "Could not connect to TV (error $error)"
+                }
+                override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
+                override fun onSessionEnding(session: CastSession) { castMessageState.value = "Disconnecting…" }
+                override fun onSessionResuming(session: CastSession, sessionId: String) { castMessageState.value = "Reconnecting…" }
+                override fun onSessionSuspended(session: CastSession, reason: Int) { castMessageState.value = "Connection interrupted" }
+            }
+            castListener = listener
+            context.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+        }.onFailure {
+            castMessageState.value = "Google Play services / Cast unavailable"
+        }
+    }
+
+    private fun openCastPicker() {
+        runCatching {
+            val context = castContext ?: CastContext.getSharedInstance(this)
+            val button = MediaRouteButton(this)
+            CastButtonFactory.setUpMediaRouteButton(this, button)
+            button.performClick()
+        }.onFailure { castMessageState.value = "Cast picker unavailable: ${it.message}" }
+    }
+
+    private fun castMedia(uriText: String, title: String, suppliedMime: String?) {
+        val session = castContext?.sessionManager?.currentCastSession ?: return
+        runCatching {
+            val uri = Uri.parse(uriText)
+            val mime = suppliedMime ?: contentResolver.getType(uri) ?: mimeFromName(uri.lastPathSegment)
+            val url = if (uri.scheme == "http" || uri.scheme == "https") {
+                uri.toString()
+            } else {
+                localCastServer?.close()
+                LocalMediaHttpServer(contentResolver, uri).also { localCastServer = it }.start()
+            }
+            val mediaType = if (mime.startsWith("audio/")) CastMediaMetadata.MEDIA_TYPE_MUSIC_TRACK
+                else CastMediaMetadata.MEDIA_TYPE_MOVIE
+            val metadata = CastMediaMetadata(mediaType).apply { putString(CastMediaMetadata.KEY_TITLE, title) }
+            val mediaInfo = MediaInfo.Builder(url)
+                .setContentType(mime)
+                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                .setMetadata(metadata)
+                .build()
+            controllerState.value?.pause()
+            val result = session.remoteMediaClient?.load(
+                MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build()
+            )
+            if (result == null) castMessageState.value = "TV connected, but remote playback is unavailable"
+            else castMessageState.value = "Sending to ${session.castDevice?.friendlyName ?: "TV"}"
+        }.onFailure {
+            localCastServer?.close()
+            localCastServer = null
+            castMessageState.value = "Cast failed: ${it.message}"
+        }
+    }
+
+    private fun mimeFromName(name: String?): String {
+        val extension = name?.substringAfterLast('.', "")?.lowercase()
+        return when (extension) {
+            "mp4", "m4v" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
+            "mp3" -> "audio/mpeg"
+            "m4a", "aac" -> "audio/mp4"
+            "flac" -> "audio/flac"
+            "wav" -> "audio/wav"
+            "ogg", "opus" -> "audio/ogg"
+            else -> "application/octet-stream"
+        }
+    }
+
     override fun onDestroy() {
+        castListener?.let { listener ->
+            castContext?.sessionManager?.removeSessionManagerListener(listener, CastSession::class.java)
+        }
+        castListener = null
+        localCastServer?.close()
+        localCastServer = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         controllerState.value = null
         super.onDestroy()
     }
+}
+
+@Composable
+private fun CastRouteButton(onClick: () -> Unit) {
+    AndroidView(
+        factory = { context ->
+            MediaRouteButton(context).also { CastButtonFactory.setUpMediaRouteButton(context, it) }
+        },
+        modifier = Modifier.size(42.dp)
+    )
 }
 
 private fun toMediaItem(file: MediaFileEntity): MediaItem =
@@ -405,6 +561,10 @@ private fun LibraryTab(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun PlayerScreen(
     title: String,
+    castConnected: Boolean,
+    castDeviceName: String,
+    castMessage: String,
+    onCast: () -> Unit,
     player: Player?,
     hasVideo: Boolean,
     playing: Boolean,
@@ -454,6 +614,8 @@ private fun PlayerScreen(
             ) {
                 Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold)
+                if (castConnected) Text("Casting to $castDeviceName · $castMessage", color = Cyan, fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 18.dp))
                 Slider(
                     value = progress.coerceIn(0f, 1f),
                     onValueChange = onSeek,
@@ -499,6 +661,7 @@ private fun PlayerScreen(
                     Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                 }
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
+                CastRouteButton(onClick = onCast)
                 IconButton(onClick = onFullscreen, enabled = hasVideo) {
                     Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Cyan)
                 }
