@@ -60,6 +60,8 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
 import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaSeekOptions
+import com.google.android.gms.cast.MediaStatus
 import org.json.JSONObject
 import com.abm.avplayer.streaming.StreamingReceiver
 import com.abm.avplayer.streaming.StreamingReceiverDiscovery
@@ -107,6 +109,11 @@ class StreamingCentreActivity : ComponentActivity() {
             var receiverPosition by remember { mutableStateOf("00:00:00") }
             var receiverDuration by remember { mutableStateOf("00:00:00") }
             var receiverControlBusy by remember { mutableStateOf(false) }
+            var castRemoteConnected by remember { mutableStateOf(false) }
+            var castRemoteState by remember { mutableStateOf("Idle") }
+            var castRemoteTitle by remember { mutableStateOf("") }
+            var castRemotePosition by remember { mutableLongStateOf(0L) }
+            var castRemoteDuration by remember { mutableLongStateOf(0L) }
             val scope = rememberCoroutineScope()
 
             fun refreshReceivers() {
@@ -228,6 +235,34 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(Unit) {
+                while (true) {
+                    val remote = runCatching {
+                        CastContext.getSharedInstance(this@StreamingCentreActivity).sessionManager.currentCastSession?.remoteMediaClient
+                    }.getOrNull()
+                    if (remote != null) {
+                        castRemoteConnected = true
+                        val status = remote.mediaStatus
+                        castRemoteState = when (status?.playerState) {
+                            MediaStatus.PLAYER_STATE_PLAYING -> "Playing"
+                            MediaStatus.PLAYER_STATE_PAUSED -> "Paused"
+                            MediaStatus.PLAYER_STATE_BUFFERING -> "Buffering"
+                            MediaStatus.PLAYER_STATE_IDLE -> "Idle"
+                            else -> "Connected"
+                        }
+                        castRemoteTitle = remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE).orEmpty()
+                        castRemotePosition = remote.approximateStreamPosition.coerceAtLeast(0L)
+                        castRemoteDuration = remote.streamDuration.coerceAtLeast(0L)
+                    } else {
+                        castRemoteConnected = false
+                        castRemoteState = "Disconnected"
+                        castRemoteTitle = ""
+                        castRemotePosition = 0L
+                        castRemoteDuration = 0L
+                    }
+                    delay(2_000)
+                }
+            }
             SideEffect {
                 currentUrlState = { currentUrl = it }
                 titleState = { pageTitle = it }
@@ -319,6 +354,26 @@ class StreamingCentreActivity : ComponentActivity() {
                     if (castMessage.isNotBlank()) {
                         Text(castMessage, color = Cyan, fontSize = 11.sp,
                             modifier = Modifier.fillMaxWidth().background(Raised).padding(horizontal = 14.dp, vertical = 7.dp))
+                    }
+                    if (castRemoteConnected) {
+                        val remote = runCatching { CastContext.getSharedInstance(this@StreamingCentreActivity).sessionManager.currentCastSession?.remoteMediaClient }.getOrNull()
+                        Column(Modifier.fillMaxWidth().background(Color(0xFF18313A)).padding(horizontal = 12.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("GOOGLE CAST · " + castRemoteState.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(castRemoteTitle.ifBlank { "Connected receiver" }, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(formatCastTime(castRemotePosition) + " / " + formatCastTime(castRemoteDuration), color = Muted, fontSize = 10.sp)
+                                }
+                                TextButton(onClick = { remote?.let { if (it.mediaStatus?.playerState == MediaStatus.PLAYER_STATE_PLAYING) it.pause() else it.play() } }, enabled = remote != null) {
+                                    Text(if (castRemoteState == "Playing" || castRemoteState == "Buffering") "Pause" else "Play", color = Cyan)
+                                }
+                                TextButton(onClick = { remote?.stop() }, enabled = remote != null) { Text("Stop", color = Cyan) }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(onClick = { remote?.let { it.seek(MediaSeekOptions.Builder().setPosition((it.approximateStreamPosition - 30_000L).coerceAtLeast(0L)).build()) } }, enabled = remote != null) { Text("−30s", color = Cyan) }
+                                TextButton(onClick = { remote?.let { it.seek(MediaSeekOptions.Builder().setPosition((it.approximateStreamPosition + 30_000L).coerceAtMost(if (it.streamDuration > 0) it.streamDuration else Long.MAX_VALUE)).build()) } }, enabled = remote != null) { Text("+30s", color = Cyan) }
+                            }
+                        }
                     }
                     if (activeReceiver != null) {
                         val receiver = activeReceiver!!
@@ -619,6 +674,10 @@ class StreamingCentreActivity : ComponentActivity() {
         }
     }
 
+    private fun formatCastTime(milliseconds: Long): String {
+        val total = (milliseconds / 1000L).coerceAtLeast(0L)
+        return "%02d:%02d:%02d".format(total / 3600L, (total % 3600L) / 60L, total % 60L)
+    }
     private fun currentYoutubeVideoId(): String? {
         val page = browser?.url.orEmpty()
         return Regex("(?:[?&]v=|youtu\\.be/|/embed/|/shorts/)([A-Za-z0-9_-]{11})")
