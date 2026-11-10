@@ -123,7 +123,12 @@ class MainActivity : ComponentActivity() {
         controllerFuture = MediaController.Builder(this, token).buildAsync()
         controllerFuture?.let { future ->
             future.addListener({
-                runCatching { future.get() }.onSuccess { controllerState.value = it }
+                runCatching { future.get() }.onSuccess {
+                    controllerState.value = it
+                    CastDiagnostics.info("PLAYER: MediaController connected; currentMediaPresent=${it.currentMediaItem != null}; playbackState=${it.playbackState}")
+                }.onFailure { error ->
+                    CastDiagnostics.warn("PLAYER: MediaController connection failed", error)
+                }
             }, mainExecutor)
         }
 
@@ -545,9 +550,11 @@ class MainActivity : ComponentActivity() {
                     castConnectedState.value = true
                     castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
                     castMessageState.value = "Connected"
-                    val item = controllerState.value?.currentMediaItem
+                    val player = controllerState.value
+                    val item = player?.currentMediaItem
                     val uri = item?.localConfiguration?.uri?.toString()
-                    if (uri != null) castMedia(uri, item.mediaMetadata.title?.toString() ?: "ABM AV Player", contentResolver.getType(Uri.parse(uri)))
+                    CastDiagnostics.info("SESSION: start-time player snapshot; controllerReady=${player != null}; mediaItemPresent=${item != null}; uriPresent=${uri != null}; playbackState=${player?.playbackState}")
+                    if (uri != null) castMedia(uri, item?.mediaMetadata?.title?.toString() ?: "ABM AV Player", contentResolver.getType(Uri.parse(uri)))
                     else castMessageState.value = "Connected · select media to cast"
                 }
                 override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
