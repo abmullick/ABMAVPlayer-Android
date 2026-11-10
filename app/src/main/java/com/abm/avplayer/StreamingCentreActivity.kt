@@ -259,6 +259,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             receiverDialAppState = it.state
                             if (!receiver.supportsDlna) receiverPlaybackState = it.state
                             if (it.state.equals("STOPPED", true)) {
+                                StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
                             }
@@ -508,7 +509,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
                                     if (youtubeRemoteReady) {
                                         TextButton(onClick = { controlYoutubeRemote("previous") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Previous", color = Cyan) }
-                                        TextButton(onClick = { controlYoutubeRemote(if (youtubeRemotePlaybackState == "Playing") "pause" else "play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) {
+                                        TextButton(onClick = { controlYoutubeRemote(if (youtubeRemotePlaybackState.equals("PLAYING", true)) "pause" else "play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) {
                                             Text(if (youtubeRemotePlaybackState == "Playing") "Pause" else "Resume", color = Cyan)
                                         }
                                         TextButton(onClick = { controlYoutubeRemote("next") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Next", color = Cyan) }
