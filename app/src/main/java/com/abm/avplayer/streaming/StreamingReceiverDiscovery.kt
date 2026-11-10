@@ -36,6 +36,7 @@ data class StreamingReceiver(
 
 data class DlnaPlaybackStatus(val state: String, val position: String, val duration: String)
 data class DialApplicationStatus(val state: String, val detail: String)
+data class DialApplicationInfo(val name: String, val state: String, val detail: String)
 
 data class YoutubeLoungePlaybackStatus(val state: String, val currentTimeSeconds: Double, val durationSeconds: Double, val videoId: String)
 
@@ -463,22 +464,84 @@ object StreamingReceiverDiscovery {
             }
         }
 
-    suspend fun getDialApplicationStatus(receiver: StreamingReceiver): Result<DialApplicationStatus> =
+    /**
+     * Enumerates applications exposed by the receiver's DIAL application resource.
+     * DIAL application names are receiver-defined; this is not a universal app catalogue.
+     */
+    suspend fun getDialApplications(receiver: StreamingReceiver): Result<List<DialApplicationInfo>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val endpoint = dialYoutubeEndpoint(receiver)
-                val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV YouTube app.")
+                require(receiver.supportsDial) { "Selected receiver does not advertise DIAL." }
+                val endpoint = URL(receiver.dialApplicationUrl ?: error("This TV has no DIAL application endpoint."))
+                require(endpoint.host.equals(receiver.address, true) && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
+                    "TV application endpoint failed the local-network safety check."
+                }
+                val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV DIAL application registry.")
+                try {
+                    val code = connection.responseCode
+                    if (code !in 200..299) error("DIAL application listing failed (HTTP $code).")
+                    val body = connection.inputStream.bufferedReader().use { it.readText().take(128_000) }
+                    val document = parseXml(body) ?: error("TV returned an invalid DIAL application listing.")
+                    val names = linkedSetOf<String>()
+                    val nodes = document.getElementsByTagNameNS("*", "name")
+                    for (index in 0 until nodes.length) {
+                        val name = nodes.item(index).textContent?.trim().orEmpty()
+                        if (name.matches(Regex("[A-Za-z0-9_. -]{1,80}"))) names.add(name)
+                    }
+                    names.map { app ->
+                        val status = getDialApplicationStatus(receiver, app).getOrNull()
+                        DialApplicationInfo(app, status?.state ?: "UNKNOWN", status?.detail ?: "Status unavailable")
+                    }
+                } finally { connection.disconnect() }
+            }
+        }
+
+    suspend fun launchDialApplication(receiver: StreamingReceiver, applicationName: String, launchData: String = ""): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialApplicationEndpoint(receiver, applicationName)
+                val connection = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the TV DIAL application.")
+                try {
+                    connection.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+                    connection.doOutput = true
+                    connection.outputStream.use { it.write(launchData.toByteArray(StandardCharsets.UTF_8)) }
+                    val code = connection.responseCode
+                    if (code !in listOf(200, 201, 202)) error("TV rejected the DIAL launch request (HTTP $code).")
+                } finally { connection.disconnect() }
+                Unit
+            }
+        }
+
+    suspend fun stopDialApplication(receiver: StreamingReceiver, applicationName: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialApplicationEndpoint(receiver, applicationName)
+                val connection = openPrivateHttp(endpoint, "DELETE") ?: error("Could not contact the TV DIAL application.")
+                try {
+                    val code = connection.responseCode
+                    if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP $code).")
+                } finally { connection.disconnect() }
+                if (applicationName.equals("YouTube", true)) youtubeSessions.remove(receiver.id)
+                Unit
+            }
+        }
+
+    suspend fun getDialApplicationStatus(receiver: StreamingReceiver, applicationName: String = "YouTube"): Result<DialApplicationStatus> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialApplicationEndpoint(receiver, applicationName)
+                val connection = openPrivateHttp(endpoint, "GET") ?: error("Could not contact the TV DIAL application.")
                 try {
                     val code = connection.responseCode
                     if (code == 404) {
                         // DIAL 404 means the TV answered but the requested app is not running (or not installed).
-                        return@runCatching DialApplicationStatus("STOPPED", "YouTube app is not running")
+                        return@runCatching DialApplicationStatus("STOPPED", applicationName + " app is not running")
                     }
                     if (code !in 200..299) error("DIAL status failed (HTTP $code).")
                     val body = connection.inputStream.bufferedReader().use { it.readText().take(16_384) }
                     val xml = parseXml(body)
                     val state = xml?.documentElement?.getAttribute("state")?.takeIf { it.isNotBlank() } ?: "RUNNING"
-                    DialApplicationStatus(state.uppercase(), xml?.documentElement?.let { firstText(it, "name") ?: firstText(it, "link") } ?: "YouTube app")
+                    DialApplicationStatus(state.uppercase(), xml?.documentElement?.let { firstText(it, "name") ?: firstText(it, "link") } ?: (applicationName + " app"))
                 } finally { connection.disconnect() }
             }
         }
@@ -493,14 +556,20 @@ object StreamingReceiverDiscovery {
         return endpoint
     }
 
-    private fun dialYoutubeEndpoint(receiver: StreamingReceiver): URL {
+    private fun dialApplicationEndpoint(receiver: StreamingReceiver, applicationName: String): URL {
+        require(receiver.supportsDial) { "Selected receiver does not advertise DIAL." }
+        require(applicationName.matches(Regex("[A-Za-z0-9_. -]{1,80}")) && applicationName != "." && applicationName != "..") {
+            "Invalid DIAL application name."
+        }
         val base = receiver.dialApplicationUrl ?: error("This TV has no DIAL application endpoint.")
-        val endpoint = URL(URL(base), "YouTube")
-        require(endpoint.host == receiver.address && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
+        val endpoint = URL(URL(base), URLEncoder.encode(applicationName, "UTF-8").replace("+", "%20"))
+        require(endpoint.host.equals(receiver.address, true) && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
             "TV application endpoint failed the local-network safety check."
         }
         return endpoint
     }
+
+    private fun dialYoutubeEndpoint(receiver: StreamingReceiver): URL = dialApplicationEndpoint(receiver, "YouTube")
 
     private fun soap(endpoint: URL, serviceType: String, action: String, arguments: String): String {
         val connection = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the DLNA TV.")
