@@ -52,7 +52,7 @@ object StreamingReceiverDiscovery {
             acquire()
         }
         try {
-            val locations = linkedMapOf<String, String>()
+            val locations = linkedMapOf<String, String?>()
             MulticastSocket(0).use { socket ->
                 socket.soTimeout = 350
                 socket.timeToLive = 2
@@ -78,10 +78,13 @@ object StreamingReceiverDiscovery {
                         val location = response.lineSequence()
                             .firstOrNull { it.substringBefore(':').trim().equals("location", true) }
                             ?.substringAfter(':')?.trim()
+                        val advertisedApplicationUrl = response.lineSequence()
+                            .firstOrNull { it.substringBefore(':').trim().equals("application-url", true) }
+                            ?.substringAfter(':')?.trim()
                         if (!location.isNullOrBlank()) {
                             val parsed = runCatching { URL(location) }.getOrNull() ?: continue
                             if (parsed.protocol.equals("http", true) && isPrivateAddress(parsed.host)) {
-                                locations.putIfAbsent(location, parsed.host)
+                                locations[location] = locations[location] ?: advertisedApplicationUrl
                             }
                         }
                     } catch (_: java.net.SocketTimeoutException) {
@@ -91,8 +94,8 @@ object StreamingReceiverDiscovery {
             }
 
             val found = linkedMapOf<String, StreamingReceiver>()
-            locations.keys.forEach { location ->
-                runCatching { readReceiverDescription(location) }.getOrNull()?.let { receiver ->
+            locations.forEach { (location, advertisedApplicationUrl) ->
+                runCatching { readReceiverDescription(location, advertisedApplicationUrl) }.getOrNull()?.let { receiver ->
                     val key = receiver.address.lowercase() + "|" + receiver.name.lowercase()
                     val old = found[key]
                     found[key] = if (old == null) receiver else merge(old, receiver)
@@ -104,14 +107,14 @@ object StreamingReceiverDiscovery {
         }
     }
 
-    private fun readReceiverDescription(location: String): StreamingReceiver? {
+    private fun readReceiverDescription(location: String, advertisedApplicationUrl: String?): StreamingReceiver? {
         val connection = openPrivateHttp(URL(location), "GET") ?: return null
         val xml: String
         val applicationHeader: String?
         try {
             if (connection.responseCode !in 200..299) return null
             xml = connection.inputStream.bufferedReader().use { it.readText().take(512_000) }
-            applicationHeader = connection.getHeaderField("Application-URL")
+            applicationHeader = advertisedApplicationUrl ?: connection.getHeaderField("Application-URL")
         } finally {
             connection.disconnect()
         }
