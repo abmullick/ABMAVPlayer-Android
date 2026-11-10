@@ -3,8 +3,7 @@ package com.abm.avplayer.audio
 import androidx.media3.common.Metadata
 import androidx.media3.extractor.metadata.id3.CommentFrame
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
-import androidx.media3.extractor.metadata.mp3.Mp3InfoReplayGain
-import androidx.media3.extractor.metadata.vorbis.VorbisComment
+import androidx.media3.extractor.metadata.flac.VorbisComment
 
 data class ReplayGainTags(
     val trackGainDb: Float? = null,
@@ -14,7 +13,7 @@ data class ReplayGainTags(
 )
 
 /**
- * Reads standard ReplayGain comments and the LAME/Xing ReplayGain fields exposed by Media3.
+ * Reads standard ReplayGain comments exposed by Media3.
  * Unsupported or malformed tags are ignored rather than interrupting playback.
  */
 object ReplayGainMetadataParser {
@@ -48,15 +47,7 @@ object ReplayGainMetadataParser {
                     }
                 }
                 is CommentFrame -> accept(entry.description, entry.text)
-                is Mp3InfoReplayGain -> {
-                    listOfNotNull(entry.field1, entry.field2).forEach { field ->
-                        when (field.name) {
-                            Mp3InfoReplayGain.GainField.NAME_RADIO -> trackGain = field.gain
-                            Mp3InfoReplayGain.GainField.NAME_AUDIOPHILE -> albumGain = field.gain
-                        }
-                    }
-                    if (entry.peak > 0f) trackPeak = entry.peak
-                }
+
             }
         }
         return ReplayGainTags(trackGain, albumGain, trackPeak, albumPeak)
