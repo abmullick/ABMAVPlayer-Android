@@ -288,10 +288,17 @@ class StreamingCentreActivity : ComponentActivity() {
             fun openProviderApp(provider: StreamingProvider) {
                 val launchedPackage = provider.appPackages.firstNotNullOfOrNull { packageName ->
                     runCatching {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.url)).apply {
+                        val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse(provider.url)).apply {
                             setPackage(packageName)
                             addCategory(Intent.CATEGORY_BROWSABLE)
-                        })
+                        }
+                        try {
+                            startActivity(deepLink)
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                                ?: throw android.content.ActivityNotFoundException("No launchable activity")
+                            startActivity(launchIntent)
+                        }
                         packageName
                     }.getOrNull()
                 }
@@ -299,7 +306,7 @@ class StreamingCentreActivity : ComponentActivity() {
                     castMessage = provider.name + " app was not found. Opening the official web service instead."
                     openProvider(provider)
                 } else {
-                    castMessage = "Opened " + provider.name + ". Use its official Cast button to send protected playback to your TV."
+                    castMessage = "Opened the official " + provider.name + " app. Use its in-app Cast option for protected playback."
                 }
             }
 
