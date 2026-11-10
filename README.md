@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; casting, the Streaming Centre and M3U import/export are not yet included. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; full queue casting, the Streaming Centre and M3U import/export are not yet included. Initial Google Cast sender integration is present; device and format validation remain. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
@@ -54,15 +54,17 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - Output preamp control and automatic headroom compensation against the highest positive EQ band.
 - Configurable peak-detection dynamic-range compressor with threshold, ratio, attack/release timing and make-up gain; settings persist between sessions.
 - ReplayGain normalisation from supported embedded Vorbis comments and ID3 user-text/comment frames, including track/album gain and peak tags, plus R128 gain tags. Track or album mode is selectable and peak metadata constrains positive gain.
+- Google Cast SDK route picker, session lifecycle and remote play/pause/seek controls using the Default Media Receiver.
+- Casting imported SAF media through a temporary LAN HTTP server with byte-range responses; direct HTTP/HTTPS media URLs can also be sent to a Cast receiver.
 
 ## Planned milestones
 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
 2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
 3. **Playback tools:** initial advanced controls implemented; Additional ReplayGain container/tag coverage, subtitle timing/offset controls and DSP/device performance testing remain.
-4. **Casting:** Google Cast discovery, device picker, remote playback state and recovery.
+4. **Casting (initial sender integration):** Google Cast discovery, device picker, session lifecycle, remote play/pause/seek and LAN streaming for imported files. Multi-item queue transfer, richer remote controls, reconnect recovery tests and broad codec/device validation remain.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
-6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, tests, signed release and in-app updates.
+6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, Cast lifecycle/format tests, signed release and in-app updates.
 
 ## Documentation
 
