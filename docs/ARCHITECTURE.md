@@ -34,7 +34,7 @@ Use Google Cast SDK's supported sender APIs and Cast session lifecycle. The init
 
 ## Streaming Centre
 
-Use a dedicated Android WebView with provider navigation, safe browsing controls and external-app handoff. Provider authentication remains with the provider. Do not intercept passwords, bypass DRM, or promise that protected browser playback can be transferred to another device. Use official Cast SDK routes or provider-supported intents when available.
+`StreamingCentreActivity` hosts a dedicated Android WebView and Compose service launcher, separate from the local Media3 player and its queue. It provides official launch cards for YouTube, Netflix, Prime Video, JioHotstar, Sony LIV and ZEE5; browser history controls; HTML5 fullscreen; and external-browser handoff. Android WebView's app-private cookie store retains supported provider sessions between launches. JavaScript and DOM storage are enabled for modern provider pages, third-party cookies are accepted for embedded authentication flows, mixed content and file/content access are disabled, SSL errors are cancelled, and navigation is restricted to HTTPS destinations while local/private hosts and clear-text HTTP are blocked. The Cast route button uses the Android Cast SDK; the sender can hand off only a directly addressable HTTPS HTML5 video URL. This is not tab mirroring and does not extract blob/MSE, DRM, encrypted or segmented streams. Provider authentication remains with the provider. Do not intercept passwords or bypass DRM. The Windows Streaming Centre's DLNA/UPnP discovery, DIAL discovery and YouTube DIAL app launch still need Android-native implementations.
 
 ## Security and privacy
 
