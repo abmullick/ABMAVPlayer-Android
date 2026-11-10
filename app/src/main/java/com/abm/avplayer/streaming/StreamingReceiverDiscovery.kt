@@ -5,6 +5,7 @@ import android.net.wifi.WifiManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -36,7 +37,9 @@ data class StreamingReceiver(
 data class DlnaPlaybackStatus(val state: String, val position: String, val duration: String)
 data class DialApplicationStatus(val state: String, val detail: String)
 
-private data class YoutubeLoungeSession(val token: String, val sid: String, val gsessionId: String, val aid: String?, var requestId: Int = 2, var commandOffset: Int = 1)
+data class YoutubeLoungePlaybackStatus(val state: String, val currentTimeSeconds: Double, val durationSeconds: Double, val videoId: String)
+
+private data class YoutubeLoungeSession(val token: String, val sid: String, val gsessionId: String, var lastEventId: String?, var requestId: Int = 2, var commandOffset: Int = 1, var state: String = "UNKNOWN", var currentTimeSeconds: Double = 0.0, var durationSeconds: Double = 0.0, var videoId: String = "")
 
 object StreamingReceiverDiscovery {
     private val youtubeSessions = ConcurrentHashMap<String, YoutubeLoungeSession>()
@@ -294,7 +297,7 @@ object StreamingReceiverDiscovery {
             "&VER=8&SID=" + formEncode(session.sid) +
             "&gsessionid=" + formEncode(session.gsessionId) +
             "&loungeIdToken=" + formEncode(session.token) +
-            (if (session.aid.isNullOrBlank()) "" else "&AID=" + formEncode(session.aid)) +
+            (if (session.lastEventId.isNullOrBlank()) "" else "&AID=" + formEncode(session.lastEventId!!)) +
             "&app=youtube-desktop&device=REMOTE_CONTROL&name=ABM%20AV%20Player&v=2"
         val response = youtubeLoungePost(path, body)
         if (response.contains("\\\"error\\\"", true) || response.contains("ERROR", true)) {
