@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 
@@ -230,6 +229,7 @@ private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
     val minDb = (range?.getOrNull(0)?.toInt() ?: -1500) / 100f
     val maxDb = (range?.getOrNull(1)?.toInt() ?: 1500) / 100f
     var effectUnavailable by remember(audioSessionId) { mutableStateOf(equalizer == null) }
+    var presetsOpen by remember(audioSessionId) { mutableStateOf(false) }
 
     DisposableEffect(equalizer) {
         onDispose { runCatching { equalizer?.release() } }
@@ -252,8 +252,32 @@ private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
                         fontSize = 11.sp
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Flat", color = Cyan, fontSize = 11.sp)
+                        Text("Presets", color = Cyan, fontSize = 11.sp)
                         Spacer(Modifier.weight(1f))
+                        androidx.compose.material3.Box {
+                            TextButton(onClick = { presetsOpen = true }) {
+                                Text("Choose preset", color = Cyan)
+                            }
+                            DropdownMenu(
+                                expanded = presetsOpen,
+                                onDismissRequest = { presetsOpen = false }
+                            ) {
+                                (0 until equalizer.numberOfPresets.toInt()).forEach { preset ->
+                                    DropdownMenuItem(
+                                        text = { Text(equalizer.getPresetName(preset.toShort()).toString()) },
+                                        onClick = {
+                                            runCatching {
+                                                equalizer.usePreset(preset.toShort())
+                                                levels = List(equalizer.numberOfBands.toInt()) { i ->
+                                                    equalizer.getBandLevel(i.toShort()).toFloat() / 100f
+                                                }
+                                            }
+                                            presetsOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                         TextButton(onClick = {
                             runCatching {
                                 equalizer.usePreset(0)
