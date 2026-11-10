@@ -443,6 +443,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                     Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
                                     Text((if (receiver.supportsDlna) "Playback: " else "DIAL app state: ") + receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "", color = Muted, fontSize = 10.sp)
+                                    if (receiver.supportsDial) Text("YouTube remote: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
@@ -457,30 +458,38 @@ class StreamingCentreActivity : ComponentActivity() {
                                     }
                                     TextButton(onClick = { controlSelectedReceiver("Stop") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Stop", color = Cyan) }
                                     TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("+30s", color = Cyan) }
-                                } else if (receiver.supportsDial) {
+                                }
+                                if (receiver.supportsDial) {
                                     TextButton(onClick = {
-                                        val videoId = this@StreamingCentreActivity.currentYoutubeVideoId()
-                                        if (videoId != null) {
-                                            receiverControlBusy = true
-                                            scope.launch {
-                                                StreamingReceiverDiscovery.launchYoutubeOnDial(receiver, videoId)
-                                                    .onSuccess { receiverPlaybackState = "RUNNING"; receiverConnectionState = "Connected"; castMessage = "YouTube relaunched on " + receiver.name }
-                                                    .onFailure { castMessage = "Launch failed: " + (it.message ?: "receiver error") }
-                                                receiverControlBusy = false
+                                        launchDialYoutube(receiver, scope) {
+                                            castMessage = it
+                                            youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(receiver)
+                                            if (youtubeRemoteReady) {
+                                                youtubeRemotePlaybackState = "Playing"
+                                                receiverConnectionState = "Connected"
+                                                receiverPlaybackState = "RUNNING"
                                             }
                                         }
-                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
+                                    if (youtubeRemoteReady) {
+                                        TextButton(onClick = { controlYoutubeRemote(if (youtubeRemotePlaybackState == "Playing") "pause" else "play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) {
+                                            Text(if (youtubeRemotePlaybackState == "Playing") "Pause" else "Resume", color = Cyan)
+                                        }
+                                        TextButton(onClick = { controlYoutubeRemote("stop") }, enabled = !receiverControlBusy) { Text("Stop video", color = Cyan) }
+                                    }
                                     TextButton(onClick = {
                                         receiverControlBusy = true
                                         scope.launch {
-                                            StreamingReceiverDiscovery.stopDialYoutube(receiver).onSuccess {
+                                            StreamingReceiverDiscovery.closeDialYoutube(receiver).onSuccess {
+                                                youtubeRemoteReady = false
+                                                youtubeRemotePlaybackState = "Not paired"
                                                 receiverPlaybackState = "STOPPED"
                                                 receiverConnectionState = "Connected"
-                                                castMessage = "YouTube app stopped on " + receiver.name
-                                            }.onFailure { castMessage = "Stop failed: " + (it.message ?: "receiver error") }
+                                                castMessage = "YouTube app closed on " + receiver.name
+                                            }.onFailure { castMessage = "Close app failed: " + (it.message ?: "receiver error") }
                                             receiverControlBusy = false
                                         }
-                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Stop YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Close YouTube", color = Cyan) }
                                 }
                             }
                             if (receiver.supportsDial && !receiver.supportsDlna) {
