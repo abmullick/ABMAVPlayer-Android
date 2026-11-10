@@ -294,6 +294,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     }
                                     AndroidView(factory = { context -> MediaRouteButton(context).also { button -> runCatching { CastButtonFactory.setUpMediaRouteButton(context, button) } } }, modifier = Modifier.size(48.dp))
                                 }
+                                OutlinedButton(onClick = { requestVideoCast { castMessage = it }; receiverPanel = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Cast current video with Google Cast") }
                                 if (discoveryBusy && receivers.isEmpty()) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         CircularProgressIndicator(Modifier.size(18.dp), color = Cyan, strokeWidth = 2.dp)
