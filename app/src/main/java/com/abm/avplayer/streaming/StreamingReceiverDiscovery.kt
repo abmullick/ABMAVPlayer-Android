@@ -29,7 +29,7 @@ data class StreamingReceiver(
     val protocolLabel: String
         get() = listOfNotNull(
             if (supportsDlna) "DLNA" else null,
-            if (supportsDial) "YouTube DIAL" else null
+            if (supportsDial) "DIAL" else null
         ).joinToString(" + ")
 }
 
