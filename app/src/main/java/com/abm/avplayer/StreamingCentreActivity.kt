@@ -393,10 +393,10 @@ class StreamingCentreActivity : ComponentActivity() {
                                     if (receiverPlaybackState.equals("PLAYING", true)) {
                                         TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Pause", color = Cyan) }
                                     } else {
-                                        TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("Resume / Play", color = Cyan) }
+                                        TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Resume / Play", color = Cyan) }
                                     }
                                     TextButton(onClick = { controlSelectedReceiver("Stop") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Stop", color = Cyan) }
-                                    TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("+30s", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("+30s", color = Cyan) }
                                 } else if (receiver.supportsDial) {
                                     TextButton(onClick = {
                                         val videoId = this@StreamingCentreActivity.currentYoutubeVideoId()
