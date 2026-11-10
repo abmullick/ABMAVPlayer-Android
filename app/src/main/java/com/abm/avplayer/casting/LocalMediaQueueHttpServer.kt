@@ -131,6 +131,7 @@ class LocalMediaQueueHttpServer(
                 append("Content-Length: $length\r\n")
                 if (partial) append("Content-Range: bytes $start-$end/$total\r\n")
                 append("Access-Control-Allow-Origin: *\r\n")
+                append("Access-Control-Allow-Headers: Content-Type, Accept-Encoding, Range\r\n")
                 append("Cache-Control: no-store\r\n")
                 append("Connection: close\r\n\r\n")
             }.toByteArray(Charsets.US_ASCII))
