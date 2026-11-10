@@ -382,7 +382,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                 Column(Modifier.weight(1f)) {
                                     Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                     Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
-                                    Text("Playback: " + receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "  ·  DIAL app", color = Muted, fontSize = 10.sp)
+                                    Text((if (receiver.supportsDlna) "Playback: " else "DIAL app state: ") + receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "", color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
