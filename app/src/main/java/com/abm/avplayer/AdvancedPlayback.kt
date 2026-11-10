@@ -148,19 +148,22 @@ private fun TrackDialog(
         title = { Text(title, color = Color.White) },
         text = {
             LazyColumn {
-                if (trackType == C.TRACK_TYPE_TEXT) {
-                    item {
-                        TextButton(
-                            onClick = {
-                                player.trackSelectionParameters =
-                                    player.trackSelectionParameters.buildUpon()
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                        .build()
-                                onDismiss()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Off", color = Color.White) }
+                item {
+                    TextButton(
+                        onClick = {
+                            player.trackSelectionParameters =
+                                player.trackSelectionParameters.buildUpon()
+                                    .setTrackTypeDisabled(trackType, trackType == C.TRACK_TYPE_TEXT)
+                                    .clearOverridesOfType(trackType)
+                                    .build()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (trackType == C.TRACK_TYPE_TEXT) "Off" else "Automatic",
+                            color = Color.White
+                        )
                     }
                 }
                 if (groups.isEmpty()) {
@@ -180,6 +183,7 @@ private fun TrackDialog(
                             ?: "Track ${trackIndex + 1}"
                         val selected = group.isTrackSelected(trackIndex)
                         TextButton(
+                            enabled = group.isTrackSupported(trackIndex),
                             onClick = {
                                 val override = TrackSelectionOverride(
                                     group.mediaTrackGroup, listOf(trackIndex)
@@ -196,7 +200,8 @@ private fun TrackDialog(
                         ) {
                             Text(
                                 label + if (selected) "  ✓" else "",
-                                color = if (selected) Cyan else Color.White
+                                color = if (!group.isTrackSupported(trackIndex)) Muted
+                                    else if (selected) Cyan else Color.White
                             )
                         }
                     }
