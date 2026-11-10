@@ -57,6 +57,12 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - Google Cast SDK route picker, session lifecycle and remote play/pause/seek controls using the Default Media Receiver.
 - Casting imported SAF media through a temporary LAN HTTP server with byte-range responses; direct HTTP/HTTPS media URLs can also be sent to a Cast receiver.
 
+## Streaming Centre
+
+Open **Streaming services** from the main player. The Android Streaming Centre is a separate activity and WebView, independent of local media playback and the main player's media queue. It provides launch cards for YouTube, Netflix, Prime Video, JioHotstar, Sony LIV and ZEE5; Back/Forward/Reload/Home navigation; HTML5 video fullscreen; and Open in browser. WebView cookies and supported login sessions are retained in the app's private WebView profile between launches. Sign in directly with each provider using your own account. ABM AV Player does not collect credentials, proxy provider content or provide subscriptions.
+
+The toolbar's Cast route picker connects to a Google Cast receiver. **Cast video** can hand off an active HTML5 video only when the page exposes a directly addressable HTTPS media URL. It is not browser-tab mirroring. Blob/MSE, encrypted, DRM-protected, segmented or authorization-dependent streams generally cannot be handed off; use the provider's own Cast control or official TV app in those cases. Android WebView playback compatibility depends on the device's WebView/DRM certification and provider policy. The first Android milestone currently offers Google Cast route selection only; the Windows Streaming Centre's combined DLNA/UPnP and DIAL discovery panel and YouTube DIAL app launch are not yet implemented on Android.
+
 ## Google Cast
 
 The player uses Google's Default Media Receiver and the Android Cast route picker. A Cast-compatible Chromecast, Google TV or Android TV receiver with Chromecast built-in must be available on the same reachable Wi-Fi/LAN as the phone.
