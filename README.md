@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; full queue casting, the Streaming Centre and M3U import/export are not yet included. Initial Google Cast sender integration is present; device and format validation remain. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; the Streaming Centre and M3U import/export are not yet included. Google Cast now supports multi-item library and playlist queue transfer with remote previous/next; device and format validation remain. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
@@ -65,7 +65,8 @@ The player uses Google's Default Media Receiver and the Android Cast route picke
 - Select an imported library item to send it to the connected receiver.
 - Use the player controls for remote play/pause and seeking. The local player is paused while remote playback is active.
 - Imported SAF files are served from the phone through a temporary, tokenized HTTP endpoint with byte-range support. The endpoint is closed when the Cast session ends or the activity is destroyed.
-- The initial implementation sends one item at a time. It does not yet transfer the complete local playlist/queue or remote subtitle/audio-track selections.
+- Selecting a library item transfers the Cast-compatible library queue and starts at the selected item. Playing a saved playlist transfers that playlist in its saved order.
+- Remote previous/next navigation is supported through the receiver queue. Queue shuffle/repeat synchronisation and remote subtitle/audio-track selection are not yet implemented.
 - Google's Default Media Receiver supports a narrower set of containers/codecs than the Windows player. MP4/WebM and common audio formats are the intended starting point; MKV and unknown containers are rejected. Codec support inside a supported container still depends on the receiver.
 
 Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach the phone's temporary LAN stream. No media is uploaded to an ABM server.
@@ -75,7 +76,7 @@ Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
 2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
 3. **Playback tools:** initial advanced controls implemented; Additional ReplayGain container/tag coverage, subtitle timing/offset controls and DSP/device performance testing remain.
-4. **Casting (initial sender integration):** Google Cast discovery, device picker, session lifecycle, remote play/pause/seek and LAN streaming for imported files. Multi-item queue transfer, richer remote controls, reconnect recovery tests and broad codec/device validation remain.
+4. **Casting (initial sender integration):** Google Cast discovery, device picker, session lifecycle, remote play/pause/seek and LAN streaming for imported files. Queue shuffle/repeat synchronisation, richer remote controls, reconnect recovery tests and broad codec/device validation remain.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
 6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, Cast lifecycle/format tests, signed release and in-app updates.
 
