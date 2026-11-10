@@ -2,7 +2,6 @@ package com.abm.avplayer.casting
 
 import android.content.ContentResolver
 import android.net.Uri
-import android.provider.OpenableColumns
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.Inet4Address
@@ -24,8 +23,6 @@ class LocalMediaHttpServer(
     private val clients = Executors.newCachedThreadPool()
     private var server: ServerSocket? = null
     private var fileLength: Long = -1L
-    private var mimeType: String = "application/octet-stream"
-    private var displayName: String = "media"
 
     @Synchronized
     fun start(): String {
@@ -37,10 +34,6 @@ class LocalMediaHttpServer(
         if (fileLength < 0L) {
             error("This media provider does not expose a seekable file length")
         }
-        mimeType = resolver.getType(uri) ?: "application/octet-stream"
-        displayName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else "media"
-        } ?: "media"
         val socket = ServerSocket(0, 8, java.net.InetAddress.getByName("0.0.0.0"))
         server = socket
         running.set(true)
@@ -106,7 +99,7 @@ class LocalMediaHttpServer(
             val status = if (partial) "206 Partial Content" else "200 OK"
             val headers = buildString {
                 append("HTTP/1.1 $status\r\n")
-                append("Content-Type: $mimeType\r\n")
+                append("Content-Type: $contentType\r\n")
                 append("Accept-Ranges: bytes\r\n")
                 append("Content-Length: $length\r\n")
                 if (partial) append("Content-Range: bytes $start-$end/$fileLength\r\n")
