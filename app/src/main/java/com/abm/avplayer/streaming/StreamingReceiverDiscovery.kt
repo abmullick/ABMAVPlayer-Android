@@ -338,6 +338,15 @@ object StreamingReceiverDiscovery {
             }
         }
     }
+    suspend fun seekYoutubeLounge(receiver: StreamingReceiver, targetSeconds: Double): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(targetSeconds.isFinite() && targetSeconds >= 0.0) { "Invalid YouTube seek position." }
+                val session = youtubeSessions[receiver.id] ?: error("YouTube remote control is not paired.")
+                sendYoutubeLoungeCommand(receiver, session, "seekTo", targetSeconds.toString())
+            }
+        }
+
     suspend fun closeDialYoutube(receiver: StreamingReceiver): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -368,6 +377,9 @@ object StreamingReceiverDiscovery {
             val id = videoId ?: error("Missing YouTube video ID.")
             "count=1&ofs=" + commandOffset + "&req0__sc=setPlaylist&req0_currentIndex=0&req0_currentTime=0&req0_videoId=" +
                 formEncode(id) + "&req0_videoIds=" + formEncode(id)
+        } else if (command == "seekTo") {
+            val target = videoId ?: error("Missing YouTube seek position.")
+            "count=1&ofs=" + commandOffset + "&req0__sc=seekTo&req0_newTime=" + formEncode(target)
         } else {
             "count=1&ofs=" + commandOffset + "&req0__sc=" + formEncode(command)
         }
