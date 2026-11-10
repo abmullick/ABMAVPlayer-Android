@@ -101,6 +101,9 @@ class StreamingCentreActivity : ComponentActivity() {
             var discoveryBusy by remember { mutableStateOf(false) }
             var activeReceiver by remember { mutableStateOf<StreamingReceiver?>(null) }
             var receiverPlaybackState by remember { mutableStateOf("Connecting…") }
+            var receiverConnectionState by remember { mutableStateOf("Connected") }
+            var receiverReconnectBusy by remember { mutableStateOf(false) }
+            var lastReconnectAttemptMs by remember { mutableStateOf(0L) }
             var receiverPosition by remember { mutableStateOf("00:00:00") }
             var receiverDuration by remember { mutableStateOf("00:00:00") }
             var receiverControlBusy by remember { mutableStateOf(false) }
@@ -117,6 +120,41 @@ class StreamingCentreActivity : ComponentActivity() {
                     } catch (error: Exception) {
                         castMessage = "Device discovery failed: " + (error.message ?: "network error")
                     } finally { discoveryBusy = false }
+                }
+            }
+            fun reconnectActiveReceiver() {
+                val previous = activeReceiver ?: return
+                receiverReconnectBusy = true
+                receiverConnectionState = "Reconnecting…" 
+                scope.launch {
+                    try {
+                        val found = StreamingReceiverDiscovery.discover(this@StreamingCentreActivity)
+                        val refreshed = found.firstOrNull { it.address.equals(previous.address, true) && it.name.equals(previous.name, true) }
+                            ?: found.firstOrNull { it.address.equals(previous.address, true) }
+                        if (refreshed == null) {
+                            receiverConnectionState = "Offline"
+                            receiverPlaybackState = "Waiting for TV"
+                            castMessage = previous.name + " was not found. Check power and Wi-Fi, then retry."
+                        } else {
+                            activeReceiver = refreshed
+                            receiverConnectionState = "Connected"
+                            castMessage = "Reconnected to " + refreshed.name
+                            if (refreshed.supportsDlna) {
+                                StreamingReceiverDiscovery.getDlnaPlaybackStatus(refreshed).onSuccess {
+                                    receiverPlaybackState = it.state
+                                    receiverPosition = it.position
+                                    receiverDuration = it.duration
+                                }.onFailure { receiverPlaybackState = "Connected · playback status unavailable" }
+                            } else {
+                                StreamingReceiverDiscovery.getDialApplicationStatus(refreshed).onSuccess {
+                                    receiverPlaybackState = it.state
+                                }.onFailure { receiverPlaybackState = "App status unavailable" }
+                            }
+                        }
+                    } catch (error: Exception) {
+                        receiverConnectionState = "Offline"
+                        castMessage = "Reconnect failed: " + (error.message ?: "network error")
+                    } finally { receiverReconnectBusy = false }
                 }
             }
             fun controlSelectedReceiver(action: String) {
@@ -151,21 +189,41 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(activeReceiver) {
-                val receiver = activeReceiver ?: return@LaunchedEffect
-                while (activeReceiver?.id == receiver.id) {
-                    if (receiver.supportsDlna) {
+            LaunchedEffect(activeReceiver?.id) {
+                val receiverId = activeReceiver?.id ?: return@LaunchedEffect
+                while (activeReceiver?.id == receiverId) {
+                    val receiver = activeReceiver ?: break
+                    val statusOk = if (receiver.supportsDlna) {
                         StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
+                            receiverConnectionState = "Connected"
                             receiverPlaybackState = it.state
                             receiverPosition = it.position
                             receiverDuration = it.duration
-                        }.onFailure { receiverPlaybackState = "Status unavailable" }
-                    } else if (receiver.supportsDial) {
+                        }.isSuccess
+                    } else {
                         StreamingReceiverDiscovery.getDialApplicationStatus(receiver).onSuccess {
+                            receiverConnectionState = "Connected"
                             receiverPlaybackState = it.state
-                        }.onFailure { receiverPlaybackState = "Status unavailable" }
+                        }.isSuccess
                     }
-                    delay(4_000)
+                    if (!statusOk) {
+                        receiverConnectionState = "Connection lost · retrying"
+                        receiverPlaybackState = "Status unavailable"
+                        val now = System.currentTimeMillis()
+                        if (now - lastReconnectAttemptMs >= 15_000L) {
+                            lastReconnectAttemptMs = now
+                            val found = runCatching { StreamingReceiverDiscovery.discover(this@StreamingCentreActivity) }.getOrNull().orEmpty()
+                            val refreshed = found.firstOrNull { it.address.equals(receiver.address, true) && it.name.equals(receiver.name, true) }
+                                ?: found.firstOrNull { it.address.equals(receiver.address, true) }
+                            if (refreshed != null) {
+                                activeReceiver = refreshed
+                                receiverConnectionState = "Reconnected"
+                            } else {
+                                receiverConnectionState = "Offline · retrying"
+                            }
+                        }
+                    }
+                    delay(5_000)
                 }
             }
 
