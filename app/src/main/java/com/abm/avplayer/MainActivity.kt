@@ -47,6 +47,7 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.abm.avplayer.casting.CastStreamService
+import com.abm.avplayer.casting.CastDiagnostics
 import com.abm.avplayer.casting.LocalCastMediaSource
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaQueueItem
@@ -84,7 +85,11 @@ class MainActivity : ComponentActivity() {
     private val pendingCastStreamCallbacks = mutableListOf<(CastStreamService) -> Unit>()
     private val castStreamConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            val service = (binder as? CastStreamService.LocalBinder)?.service() ?: return
+            val service = (binder as? CastStreamService.LocalBinder)?.service() ?: run {
+                CastDiagnostics.warn("SERVICE_BIND: unexpected binder type")
+                return
+            }
+            CastDiagnostics.info("SERVICE_BIND: CastStreamService connected; endpointActive=${service.hasActiveEndpoint}")
             castStreamService = service
             val callbacks = pendingCastStreamCallbacks.toList()
             pendingCastStreamCallbacks.clear()
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
             } }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
+            CastDiagnostics.warn("SERVICE_BIND: CastStreamService disconnected unexpectedly")
             castStreamService = null
             castStreamBound = false
             castMessageState.value = "Cast stream service disconnected; reconnect or select the media again"
@@ -424,15 +430,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun withCastStreamService(callback: (CastStreamService) -> Unit) {
-        castStreamService?.let { callback(it); return }
+        castStreamService?.let {
+            CastDiagnostics.info("SERVICE_BIND: reusing CastStreamService; endpointActive=${it.hasActiveEndpoint}")
+            callback(it)
+            return
+        }
         pendingCastStreamCallbacks += callback
-        if (castStreamBound) return
+        if (castStreamBound) {
+            CastDiagnostics.info("SERVICE_BIND: bind already pending; callbacks=${pendingCastStreamCallbacks.size}")
+            return
+        }
         val intent = Intent(this, CastStreamService::class.java)
         runCatching {
+            CastDiagnostics.info("SERVICE_BIND: starting foreground service and binding")
             startForegroundService(intent)
             castStreamBound = bindService(intent, castStreamConnection, Context.BIND_AUTO_CREATE)
             if (!castStreamBound) error("Android could not bind the Cast stream service")
-        }.onFailure {
+        }.onFailure { error ->
+            CastDiagnostics.warn("SERVICE_BIND: failed to start or bind CastStreamService", error)
             pendingCastStreamCallbacks.clear()
             runCatching { stopService(intent) }
             castMessageState.value = "Could not start background Cast streaming: ${it.message}"
@@ -520,10 +535,13 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun setupCast() {
+        CastDiagnostics.info("INIT: setting up Google Cast SDK; package=${packageName}; sdk=${android.os.Build.VERSION.SDK_INT}; manufacturer=${android.os.Build.MANUFACTURER}; model=${android.os.Build.MODEL}")
         runCatching { CastContext.getSharedInstance(this) }.onSuccess { context ->
+            CastDiagnostics.info("INIT: Google Cast SDK initialized; currentSession=${context.sessionManager.currentCastSession != null}")
             castContext = context
             val listener = object : SessionManagerListener<CastSession> {
                 override fun onSessionStarted(session: CastSession, sessionId: String) {
+                    CastDiagnostics.info("SESSION: started; device=${session.castDevice?.friendlyName}; sessionIdPresent=${sessionId.isNotBlank()}; connected=${session.isConnected}")
                     castConnectedState.value = true
                     castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
                     castMessageState.value = "Connected"
@@ -533,12 +551,14 @@ class MainActivity : ComponentActivity() {
                     else castMessageState.value = "Connected · select media to cast"
                 }
                 override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                    CastDiagnostics.info("SESSION: resumed; device=${session.castDevice?.friendlyName}; wasSuspended=$wasSuspended; connected=${session.isConnected}")
                     castConnectedState.value = true
                     castDeviceNameState.value = session.castDevice?.friendlyName.orEmpty()
                     castMessageState.value = "Reconnected"
                     recoverCastStreamIfNeeded()
                 }
                 override fun onSessionEnded(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SESSION: ended; errorCode=$error; device=${session.castDevice?.friendlyName}")
                     castConnectedState.value = false
                     castDeviceNameState.value = ""
                     castMessageState.value = "Disconnected"
@@ -552,19 +572,33 @@ class MainActivity : ComponentActivity() {
                     stopCastStreamService()
                 }
                 override fun onSessionStartFailed(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SESSION: start failed; errorCode=$error; device=${session.castDevice?.friendlyName}")
                     castMessageState.value = "Could not connect to TV (error $error)"
                 }
                 override fun onSessionResumeFailed(session: CastSession, error: Int) {
+                    CastDiagnostics.warn("SESSION: resume failed; errorCode=$error")
                     castConnectedState.value = false
                     castDeviceNameState.value = ""
                     castMessageState.value = "Could not restore the Cast session (error $error)"
                     clearCastRecoverySnapshot()
                     stopCastStreamService()
                 }
-                override fun onSessionStarting(session: CastSession) { castMessageState.value = "Connecting…" }
-                override fun onSessionEnding(session: CastSession) { castMessageState.value = "Disconnecting…" }
-                override fun onSessionResuming(session: CastSession, sessionId: String) { castMessageState.value = "Reconnecting…" }
-                override fun onSessionSuspended(session: CastSession, reason: Int) { castMessageState.value = "Connection interrupted" }
+                override fun onSessionStarting(session: CastSession) {
+                    CastDiagnostics.info("SESSION: starting; device=${session.castDevice?.friendlyName}")
+                    castMessageState.value = "Connecting…"
+                }
+                override fun onSessionEnding(session: CastSession) {
+                    CastDiagnostics.info("SESSION: ending; device=${session.castDevice?.friendlyName}")
+                    castMessageState.value = "Disconnecting…"
+                }
+                override fun onSessionResuming(session: CastSession, sessionId: String) {
+                    CastDiagnostics.info("SESSION: resuming; device=${session.castDevice?.friendlyName}")
+                    castMessageState.value = "Reconnecting…"
+                }
+                override fun onSessionSuspended(session: CastSession, reason: Int) {
+                    CastDiagnostics.warn("SESSION: suspended; reason=$reason; device=${session.castDevice?.friendlyName}")
+                    castMessageState.value = "Connection interrupted"
+                }
             }
             castListener = listener
             context.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
@@ -573,8 +607,9 @@ class MainActivity : ComponentActivity() {
                 castDeviceNameState.value = active.castDevice?.friendlyName.orEmpty()
                 castMessageState.value = "Connected"
             }
-        }.onFailure {
-            castMessageState.value = "Google Play services / Cast unavailable"
+        }.onFailure { error ->
+            CastDiagnostics.warn("INIT: Google Cast SDK initialization failed", error)
+            castMessageState.value = "Google Play services / Cast unavailable: ${error.message}"
         }
     }
 
@@ -740,9 +775,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun castMedia(uriText: String, title: String, suppliedMime: String?, startPositionMs: Long = 0L) {
-        val session = castContext?.sessionManager?.currentCastSession ?: return
+        val session = castContext?.sessionManager?.currentCastSession
+        if (session == null) {
+            CastDiagnostics.warn("LOAD: aborted because no active Cast session exists")
+            castMessageState.value = "Select and connect to a TV before casting."
+            return
+        }
         val requestedUri = Uri.parse(uriText)
+        CastDiagnostics.info("LOAD: requested; device=${session.castDevice?.friendlyName}; scheme=${requestedUri.scheme}; suppliedMime=$suppliedMime; title=$title; startPositionMs=$startPositionMs")
         if (requestedUri.scheme != "http" && requestedUri.scheme != "https" && castStreamService == null) {
+            CastDiagnostics.info("LOAD: local document requires CastStreamService; requesting service bind")
             withCastStreamService { castMedia(uriText, title, suppliedMime, startPositionMs) }
             return
         }
@@ -751,6 +793,7 @@ class MainActivity : ComponentActivity() {
             val mime = suppliedMime?.takeUnless { it == "application/octet-stream" }
                 ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
                 ?: mimeFromName(uri.lastPathSegment)
+            CastDiagnostics.info("LOAD: resolved media; scheme=${uri.scheme}; mime=$mime; localDocument=${uri.scheme != "http" && uri.scheme != "https"}")
             if (uri.scheme != "http" && uri.scheme != "https") {
                 val recoveryFile = MediaFileEntity(uri.toString(), title, mime, System.currentTimeMillis())
                 saveCastRecoverySnapshot(listOf(Triple(recoveryFile, uri, mime)), 0)
@@ -765,6 +808,8 @@ class MainActivity : ComponentActivity() {
                 castStreamService?.startSingleServer(uri, mime)
                     ?: error("Background Cast streaming service is unavailable")
             }
+            val endpoint = Uri.parse(url)
+            CastDiagnostics.info("LOAD: media endpoint ready; endpointScheme=${endpoint.scheme}; endpointHost=${endpoint.host}; endpointPort=${endpoint.port}; mime=$mime")
             val mediaType = if (mime.startsWith("audio/")) CastMediaMetadata.MEDIA_TYPE_MUSIC_TRACK
                 else CastMediaMetadata.MEDIA_TYPE_MOVIE
             val metadata = CastMediaMetadata(mediaType).apply { putString(CastMediaMetadata.KEY_TITLE, title) }
@@ -774,25 +819,32 @@ class MainActivity : ComponentActivity() {
                 .setMetadata(metadata)
                 .build()
             controllerState.value?.pause()
-            val result = session.remoteMediaClient?.load(
+            val remote = session.remoteMediaClient ?: error("Cast session exists but RemoteMediaClient is null")
+            CastDiagnostics.info("LOAD: issuing remote load; contentType=${mediaInfo.contentType}; streamType=${mediaInfo.streamType}")
+            val result = remote.load(
                 MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true)
                     .setCurrentTime(startPositionMs.coerceAtLeast(0L)).build()
             )
             if (result == null) {
+                CastDiagnostics.warn("LOAD: RemoteMediaClient.load returned null")
                 castMessageState.value = "TV connected, but remote playback is unavailable"
             } else {
                 castMessageState.value = "Sending to ${session.castDevice?.friendlyName ?: "TV"}"
                 result.setResultCallback { loadResult ->
-                    castMessageState.value = if (loadResult.status.isSuccess) {
+                    val status = loadResult.status
+                    val remoteStatus = remote.mediaStatus
+                    CastDiagnostics.info("LOAD_RESULT: success=${status.isSuccess}; statusCode=${status.statusCode}; statusMessage=${status.statusMessage}; playerState=${remoteStatus?.playerState}; idleReason=${remoteStatus?.idleReason}; contentIdPresent=${remoteStatus?.mediaInfo?.contentId?.isNotBlank() == true}")
+                    castMessageState.value = if (status.isSuccess) {
                         "Playing on ${session.castDevice?.friendlyName ?: "TV"}"
                     } else {
-                        "TV could not load this media (Cast error ${loadResult.status.statusCode})"
+                        "TV could not load this media (Cast error ${status.statusCode}: ${status.statusMessage})"
                     }
                 }
             }
-        }.onFailure {
+        }.onFailure { error ->
+            CastDiagnostics.warn("LOAD: media preparation or handoff failed; scheme=${requestedUri.scheme}; mimeCandidate=$suppliedMime", error)
             castStreamService?.clearServers()
-            castMessageState.value = "Cast failed: ${it.message}"
+            castMessageState.value = "Cast failed: ${error.message}"
         }
     }
 
