@@ -179,6 +179,7 @@ object StreamingReceiverDiscovery {
         withContext(Dispatchers.IO) {
             runCatching {
                 require(videoId.matches(Regex("[A-Za-z0-9_-]{11}"))) { "Could not identify a valid YouTube video ID on this page." }
+                youtubeSessions.remove(receiver.id)
                 val endpoint = dialYoutubeEndpoint(receiver)
                 // Start the TV app first, then pair a YouTube Lounge remote session as Windows does.
                 val launch = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the TV's YouTube app.")
@@ -228,7 +229,12 @@ object StreamingReceiverDiscovery {
 
                 val session = YoutubeLoungeSession(token, sid, gsession, aid)
                 youtubeSessions[receiver.id] = session
-                sendYoutubeLoungeCommand(receiver, session, "setPlaylist", videoId)
+                try {
+                    sendYoutubeLoungeCommand(receiver, session, "setPlaylist", videoId)
+                } catch (error: Exception) {
+                    youtubeSessions.remove(receiver.id)
+                    throw error
+                }
             }
         }
 
