@@ -592,7 +592,7 @@ private fun PlayerScreen(
     BackHandler(enabled = fullscreen, onBack = onFullscreen)
     if (fullscreen) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            if (hasVideo && player != null) {
+            if (!castConnected && hasVideo && player != null) {
                 AndroidView(
                     factory = { context ->
                         PlayerView(context).apply {
@@ -605,7 +605,7 @@ private fun PlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                Text("No video loaded", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                Text(if (castConnected) "PLAYING ON $castDeviceName" else "No video loaded", color = Color.White, modifier = Modifier.align(Alignment.Center))
             }
             Row(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -687,7 +687,7 @@ private fun PlayerScreen(
                         )),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (hasMedia && player != null) {
+                    if (!castConnected && hasMedia && player != null) {
                         AndroidView(
                             factory = { context ->
                                 PlayerView(context).apply {
@@ -700,7 +700,9 @@ private fun PlayerScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (castConnected) {
+                            Text("PLAYING ON $castDeviceName", color = Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.GraphicEq, contentDescription = null,
                                 tint = Cyan, modifier = Modifier.size(68.dp))
                             Spacer(Modifier.height(10.dp))
