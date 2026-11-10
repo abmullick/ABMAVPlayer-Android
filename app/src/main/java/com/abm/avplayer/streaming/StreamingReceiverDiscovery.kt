@@ -371,17 +371,7 @@ object StreamingReceiverDiscovery {
             }
         }
 
-    suspend fun stopDialYoutube(receiver: StreamingReceiver): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val endpoint = dialYoutubeEndpoint(receiver)
-                val connection = openPrivateHttp(endpoint, "DELETE") ?: error("Could not contact the TV YouTube app.")
-                try {
-                    val code = connection.responseCode
-                    if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP $code).")
-                } finally { connection.disconnect() }
-            }
-        }
+    suspend fun stopDialYoutube(receiver: StreamingReceiver): Result<Unit> = closeDialYoutube(receiver)
 
     private fun checkedControlEndpoint(receiver: StreamingReceiver): URL {
         val endpoint = URL(receiver.avTransportControlUrl ?: error("This TV has no DLNA AVTransport endpoint."))
