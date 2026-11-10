@@ -1,6 +1,7 @@
 package com.abm.avplayer.playback
 
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.Metadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -47,6 +48,17 @@ class PlayerService : MediaSessionService() {
 
             override fun onMetadata(metadata: Metadata) {
                 TenBandEqSettings.updateReplayGain(ReplayGainMetadataParser.parse(metadata))
+            }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                for (group in tracks.groups) {
+                    if (group.type != C.TRACK_TYPE_AUDIO) continue
+                    for (trackIndex in 0 until group.length) {
+                        group.getTrackFormat(trackIndex).metadata?.let { metadata ->
+                            TenBandEqSettings.updateReplayGain(ReplayGainMetadataParser.parse(metadata))
+                        }
+                    }
+                }
             }
         })
         player = exoPlayer
