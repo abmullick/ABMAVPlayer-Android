@@ -5,7 +5,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
-import java.io.FileInputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
@@ -25,7 +24,6 @@ class LocalMediaHttpServer(
     private val clients = Executors.newCachedThreadPool()
     private var server: ServerSocket? = null
     private var fileLength: Long = -1L
-    private var startOffset: Long = 0L
     private var mimeType: String = "application/octet-stream"
     private var displayName: String = "media"
 
@@ -34,11 +32,9 @@ class LocalMediaHttpServer(
         if (running.get() && server != null) return mediaUrl()
         val afd = resolver.openAssetFileDescriptor(uri, "r")
             ?: error("Cannot open the selected media document")
-        startOffset = afd.startOffset
         fileLength = afd.length
         afd.close()
         if (fileLength < 0L) {
-            afd.close()
             error("This media provider does not expose a seekable file length")
         }
         mimeType = resolver.getType(uri) ?: "application/octet-stream"
@@ -62,13 +58,17 @@ class LocalMediaHttpServer(
     }
 
     private fun mediaUrl(): String {
-        val address = NetworkInterface.getNetworkInterfaces().toList()
-            .asSequence()
+        val interfaces = NetworkInterface.getNetworkInterfaces().toList()
             .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .filterIsInstance<Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
-            ?.hostAddress ?: error("No reachable Wi-Fi/LAN IPv4 address found")
+        val addresses = interfaces.flatMap { network ->
+            network.inetAddresses.toList().filterIsInstance<Inet4Address>()
+                .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+                .map { network.name.lowercase() to it.hostAddress }
+        }
+        val address = addresses.firstOrNull { (name, _) ->
+            name.startsWith("wlan") || name.startsWith("wifi") || name.startsWith("eth")
+        }?.second ?: addresses.firstOrNull()?.second
+            ?: error("No reachable Wi-Fi/LAN IPv4 address found")
         return "http://$address:${server?.localPort}/media"
     }
 
@@ -117,19 +117,23 @@ class LocalMediaHttpServer(
             output.flush()
             if (parts[0] == "HEAD") return
             val afd = resolver.openAssetFileDescriptor(uri, "r") ?: return
-            FileInputStream(afd.fileDescriptor).channel.use { channel ->
-                channel.position(startOffset + start)
+            afd.createInputStream().use { stream ->
+                var toSkip = start
+                while (toSkip > 0L) {
+                    val skipped = stream.skip(toSkip)
+                    if (skipped <= 0L) break
+                    toSkip -= skipped
+                }
                 val buffer = ByteArray(64 * 1024)
                 var remaining = length
                 while (remaining > 0L) {
-                    val count = channel.read(java.nio.ByteBuffer.wrap(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt()))
+                    val count = stream.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
                     if (count <= 0) break
                     output.write(buffer, 0, count)
                     remaining -= count
                 }
                 output.flush()
             }
-            afd.close()
         }
     }
 
