@@ -59,6 +59,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
             }
 
             var mediaTitle by remember { mutableStateOf("Nothing playing") }
+            var hasMedia by remember { mutableStateOf(false) }
             var isPlaying by remember { mutableStateOf(false) }
             var duration by remember { mutableLongStateOf(0L) }
             var position by remember { mutableLongStateOf(0L) }
@@ -94,6 +96,7 @@ class MainActivity : ComponentActivity() {
                         isPlaying = playing
                     }
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        hasMedia = mediaItem != null
                         mediaTitle = mediaItem?.mediaMetadata?.title?.toString()
                             ?: mediaItem?.localConfiguration?.uri?.lastPathSegment
                             ?: "Now playing"
@@ -129,6 +132,7 @@ class MainActivity : ComponentActivity() {
                     player.prepare()
                     player.play()
                     mediaTitle = it.lastPathSegment ?: "Selected media"
+                    hasMedia = true
                 }
             }
 
@@ -136,6 +140,8 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = Canvas) {
                     PlayerHome(
                         title = mediaTitle,
+                        player = player,
+                        hasMedia = hasMedia,
                         isPlaying = isPlaying,
                         position = position,
                         duration = duration,
@@ -160,6 +166,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PlayerHome(
     title: String,
+    player: ExoPlayer,
+    hasMedia: Boolean,
     isPlaying: Boolean,
     position: Long,
     duration: Long,
@@ -211,16 +219,30 @@ private fun PlayerHome(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.GraphicEq,
-                        contentDescription = null,
-                        tint = Cyan,
-                        modifier = Modifier.size(68.dp)
+                if (hasMedia) {
+                    AndroidView(
+                        factory = { context ->
+                            PlayerView(context).apply {
+                                useController = false
+                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                this.player = player
+                            }
+                        },
+                        update = { it.player = player },
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Text("YOUR MEDIA. YOUR SPACE.", color = Color.White.copy(alpha = .75f),
-                        fontSize = 10.sp, letterSpacing = 2.sp)
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            contentDescription = null,
+                            tint = Cyan,
+                            modifier = Modifier.size(68.dp)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("YOUR MEDIA. YOUR SPACE.", color = Color.White.copy(alpha = .75f),
+                            fontSize = 10.sp, letterSpacing = 2.sp)
+                    }
                 }
             }
             Text(
