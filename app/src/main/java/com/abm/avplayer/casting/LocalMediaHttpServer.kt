@@ -8,6 +8,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -24,6 +25,7 @@ class LocalMediaHttpServer(
     private val clients = Executors.newCachedThreadPool()
     private var server: ServerSocket? = null
     private var fileLength: Long = -1L
+    private val accessToken = UUID.randomUUID().toString().replace("-", "")
 
     @Synchronized
     fun start(): String {
@@ -63,7 +65,7 @@ class LocalMediaHttpServer(
             name.startsWith("wlan") || name.startsWith("wifi") || name.startsWith("eth")
         }?.second ?: addresses.firstOrNull()?.second
             ?: error("No reachable Wi-Fi/LAN IPv4 address found")
-        return "http://$address:${server?.localPort}/media"
+        return "http://$address:${server?.localPort}/$accessToken/media"
     }
 
     private fun serve(socket: Socket) {
@@ -73,7 +75,12 @@ class LocalMediaHttpServer(
             val output = BufferedOutputStream(client.getOutputStream())
             val requestLine = readLine(input) ?: return
             val parts = requestLine.split(" ")
-            if (parts.size < 2 || (parts[0] != "GET" && parts[0] != "HEAD")) {
+            if (parts.size < 2 || parts[1] != "/$accessToken/media") {
+                output.write("HTTP/1.1 404 Not Found\\r\\nConnection: close\\r\\n\\r\\n".toByteArray())
+                output.flush()
+                return
+            }
+            if (parts[0] != "GET" && parts[0] != "HEAD") {
                 output.write("HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\n\r\n".toByteArray())
                 output.flush()
                 return
