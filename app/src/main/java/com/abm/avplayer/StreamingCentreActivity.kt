@@ -88,7 +88,13 @@ class StreamingCentreActivity : ComponentActivity() {
             var pageProgress by remember { mutableIntStateOf(0) }
             var browserError by remember { mutableStateOf("") }
             var castMessage by remember { mutableStateOf("") }
-            val webView = browser
+            SideEffect {
+                currentUrlState = { currentUrl = it }
+                titleState = { pageTitle = it }
+                navigationState = { back, forward -> canGoBack = back; canGoForward = forward }
+                progressState = { pageProgress = it }
+                pageErrorState = { browserError = it }
+            }
 
             fun openProvider(provider: StreamingProvider) {
                 homeMode = false
@@ -130,6 +136,8 @@ class StreamingCentreActivity : ComponentActivity() {
                             pageTitle = "Streaming Centre"
                             currentUrl = ""
                             browserError = ""
+                            browser?.stopLoading()
+                            browser?.loadUrl("about:blank")
                         }) {
                             Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
                         }
@@ -250,7 +258,7 @@ class StreamingCentreActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val uri = request.url
-                    if (uri.scheme.equals("https", true)) return false
+                    if (uri.scheme.equals("https", true) && isAllowedWebDestination(uri)) return false
                     if (uri.scheme.equals("http", true)) {
                         // Never silently downgrade a provider session to clear-text HTTP.
                         return true
@@ -259,15 +267,17 @@ class StreamingCentreActivity : ComponentActivity() {
                     return true
                 }
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                    if (url.startsWith("https://")) {
+                    if (url == "about:blank" || (url.startsWith("https://") && isAllowedWebDestination(Uri.parse(url)))) {
                         currentUrlState?.invoke(url)
                         pageErrorState?.invoke("")
                     }
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    currentUrlState?.invoke(url)
-                    titleState?.invoke(view.title ?: url)
-                    navigationState?.invoke(view.canGoBack(), view.canGoForward())
+                    if (url == "about:blank" || (url.startsWith("https://") && isAllowedWebDestination(Uri.parse(url)))) {
+                        currentUrlState?.invoke(url)
+                        titleState?.invoke(view.title ?: url)
+                        navigationState?.invoke(view.canGoBack(), view.canGoForward())
+                    }
                 }
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                     if (request.isForMainFrame) pageErrorState?.invoke(error.description?.toString() ?: "Network error")
@@ -292,6 +302,18 @@ class StreamingCentreActivity : ComponentActivity() {
     private var progressState: ((Int) -> Unit)? = null
     private var pageErrorState: ((String) -> Unit)? = null
 
+    private fun isAllowedWebDestination(uri: Uri): Boolean {
+        val host = uri.host?.lowercase().orEmpty()
+        if (host.isBlank() || host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false
+        if (host.startsWith("10.") || host.startsWith("127.") || host.startsWith("192.168.") || host.startsWith("169.254.")) return false
+        if (host.startsWith("172.")) {
+            val second = host.split(".").getOrNull(1)?.toIntOrNull()
+            if (second != null && second in 16..31) return false
+        }
+        if (host == "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")) return false
+        return true
+    }
+
     private fun openInBrowser() {
         val url = browser?.url ?: return
         if (url.startsWith("https://")) runCatching {
@@ -304,7 +326,7 @@ class StreamingCentreActivity : ComponentActivity() {
         val castSession = runCatching { CastContext.getSharedInstance(this).sessionManager.currentCastSession }.getOrNull()
         val remote = castSession?.remoteMediaClient
         if (remote == null) return report("Choose a Google Cast receiver using the Cast icon first.")
-        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && /^https?:\\/\\//i.test(x.currentSrc)).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
+        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && x.currentSrc.startsWith('https://')).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
         web.evaluateJavascript(script) { encoded ->
             runCatching {
                 val payload = JSONObject(encoded ?: "{}")
