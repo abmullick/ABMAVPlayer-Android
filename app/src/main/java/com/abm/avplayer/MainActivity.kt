@@ -217,6 +217,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 active.addListener(listener)
+                var lastCastRecoveryCheckpointAt = 0L
                 try {
                     while (true) {
                         val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
@@ -234,6 +235,16 @@ class MainActivity : ComponentActivity() {
                             castSubtitleEnabledState.value = status?.activeTrackIds?.contains(1L) == true
                             position = remote.approximateStreamPosition.coerceAtLeast(0L)
                             duration = remote.streamDuration.coerceAtLeast(0L)
+                            val now = System.currentTimeMillis()
+                            if (now - lastCastRecoveryCheckpointAt >= 2_000L) {
+                                val queueItems = status?.queueItems.orEmpty()
+                                val currentQueueIndex = queueItems.indexOfFirst { it.itemId == status?.currentItemId }
+                                updateCastRecoveryProgress(
+                                    position,
+                                    if (!castShuffleState.value && currentQueueIndex >= 0) currentQueueIndex else null
+                                )
+                                lastCastRecoveryCheckpointAt = now
+                            }
                             if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
                         } else {
                             position = active.currentPosition.coerceAtLeast(0L)
@@ -442,6 +453,19 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString("snapshot", snapshot.toString()).apply()
     }
 
+    private fun updateCastRecoveryProgress(positionMs: Long, selectedIndex: Int? = null) {
+        val raw = castRecoveryPreferences().getString("snapshot", null) ?: return
+        runCatching {
+            val snapshot = JSONObject(raw)
+            snapshot.put("positionMs", positionMs.coerceAtLeast(0L))
+            if (selectedIndex != null && snapshot.optString("mode") == "queue") {
+                val count = snapshot.optJSONArray("items")?.length() ?: 0
+                if (selectedIndex in 0 until count) snapshot.put("selectedIndex", selectedIndex)
+            }
+            castRecoveryPreferences().edit().putString("snapshot", snapshot.toString()).apply()
+        }
+    }
+
     private fun clearCastRecoverySnapshot() {
         castRecoveryPreferences().edit().remove("snapshot").apply()
     }
@@ -465,12 +489,16 @@ class MainActivity : ComponentActivity() {
                     MediaFileEntity(uri, title, mime, item.optLong("addedAt", System.currentTimeMillis())) to Triple(Uri.parse(uri), title, mime)
                 }
                 require(items.isNotEmpty()) { "No saved Cast items" }
+                val resumePositionMs = snapshot.optLong("positionMs", 0L).coerceAtLeast(0L)
                 when (snapshot.optString("mode")) {
-                    "single" -> { val data = items.first().second; castMedia(data.first.toString(), data.second, data.third) }
+                    "single" -> {
+                        val data = items.first().second
+                        castMedia(data.first.toString(), data.second, data.third, resumePositionMs)
+                    }
                     else -> {
                         val library = items.map { it.first }
                         val selectedIndex = snapshot.optInt("selectedIndex", 0).coerceIn(library.indices)
-                        castLibraryQueue(library, library[selectedIndex])
+                        castLibraryQueue(library, library[selectedIndex], resumePositionMs)
                     }
                 }
             }.onFailure {
@@ -537,7 +565,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun castLibraryQueue(library: List<MediaFileEntity>, selected: MediaFileEntity) {
+    private fun castLibraryQueue(library: List<MediaFileEntity>, selected: MediaFileEntity, startPositionMs: Long = 0L) {
         val session = castContext?.sessionManager?.currentCastSession ?: return
         val needsLanServer = library.any { file ->
             val scheme = Uri.parse(file.uri).scheme
@@ -620,7 +648,7 @@ class MainActivity : ComponentActivity() {
                 queueItems.toTypedArray(),
                 selectedIndex,
                 MediaStatus.REPEAT_MODE_REPEAT_OFF,
-                0L,
+                startPositionMs.coerceAtLeast(0L),
                 null
             ).setResultCallback { result ->
                 castMessageState.value = if (result.status.isSuccess) {
@@ -698,11 +726,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun castMedia(uriText: String, title: String, suppliedMime: String?) {
+    private fun castMedia(uriText: String, title: String, suppliedMime: String?, startPositionMs: Long = 0L) {
         val session = castContext?.sessionManager?.currentCastSession ?: return
         val requestedUri = Uri.parse(uriText)
         if (requestedUri.scheme != "http" && requestedUri.scheme != "https" && castStreamService == null) {
-            withCastStreamService { castMedia(uriText, title, suppliedMime) }
+            withCastStreamService { castMedia(uriText, title, suppliedMime, startPositionMs) }
             return
         }
         runCatching {
@@ -734,7 +762,8 @@ class MainActivity : ComponentActivity() {
                 .build()
             controllerState.value?.pause()
             val result = session.remoteMediaClient?.load(
-                MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build()
+                MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true)
+                    .setCurrentTime(startPositionMs.coerceAtLeast(0L)).build()
             )
             if (result == null) {
                 castMessageState.value = "TV connected, but remote playback is unavailable"
