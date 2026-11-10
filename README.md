@@ -66,7 +66,7 @@ The player uses Google's Default Media Receiver and the Android Cast route picke
 - Use the player controls for remote play/pause and seeking. The local player is paused while remote playback is active.
 - Imported SAF files are served from the phone through a temporary, tokenized HTTP endpoint with byte-range support. The endpoint is closed when the Cast session ends or the activity is destroyed.
 - Selecting a library item transfers the Cast-compatible library queue and starts at the selected item. Playing a saved playlist transfers that playlist in its saved order.
-- Remote previous/next navigation is supported through the receiver queue. Queue shuffle/repeat synchronisation and remote subtitle/audio-track selection are not yet implemented.
+- Remote previous/next navigation is supported through the receiver queue. Queue shuffle and repeat controls are synchronised with the Cast receiver; shuffle reorders upcoming items while keeping the current item in place, and repeat supports off/all/one. Remote subtitle/audio-track selection is not yet implemented.
 - Google's Default Media Receiver supports a narrower set of containers/codecs than the Windows player. MP4/WebM and common audio formats are the intended starting point; MKV and unknown containers are rejected. Codec support inside a supported container still depends on the receiver.
 
 Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach the phone's temporary LAN stream. No media is uploaded to an ABM server.
