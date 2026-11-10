@@ -147,7 +147,7 @@ class GoogleCastReceiverControl(private val remote: RemoteMediaClient) : Streami
         )
     }
 
-    override suspend fun execute(command: ReceiverControlCommand): Result<Unit>> = when (command) {
+    override suspend fun execute(command: ReceiverControlCommand): Result<Unit> = when (command) {
         ReceiverControlCommand.Play -> await(remote.play())
         ReceiverControlCommand.Pause -> await(remote.pause())
         ReceiverControlCommand.StopPlayback -> await(remote.stop())
