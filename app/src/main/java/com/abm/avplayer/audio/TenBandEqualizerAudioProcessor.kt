@@ -192,7 +192,10 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         q: Double,
         gainDb: Double
     ): BiquadCoefficients {
-        val nyquistSafeFrequency = frequency.coerceAtMost(sampleRate * 0.45).coerceAtLeast(10.0)
+        if (frequency >= sampleRate * 0.45 || gainDb == 0.0) {
+            return BiquadCoefficients(1.0, 0.0, 0.0, 0.0, 0.0)
+        }
+        val nyquistSafeFrequency = frequency.coerceAtLeast(10.0)
         val a = 10.0.pow(gainDb / 40.0)
         val omega = 2.0 * PI * nyquistSafeFrequency / sampleRate
         val alpha = sin(omega) / (2.0 * q)
