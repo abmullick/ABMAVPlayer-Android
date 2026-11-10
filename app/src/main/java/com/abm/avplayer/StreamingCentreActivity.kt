@@ -172,6 +172,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     receiverDialAppState = it.state
                                     if (!refreshed.supportsDlna) receiverPlaybackState = it.state
                                     if (it.state.equals("STOPPED", true)) {
+                                        StreamingReceiverDiscovery.clearYoutubeRemoteSession(refreshed)
                                         youtubeRemoteReady = false
                                         youtubeRemotePlaybackState = "Not paired"
                                     }
@@ -218,6 +219,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         .onFailure {
                             castMessage = "YouTube remote control failed: " + (it.message ?: "receiver error")
                             if (it.message?.contains("not paired", true) == true) {
+                                StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
                             }
