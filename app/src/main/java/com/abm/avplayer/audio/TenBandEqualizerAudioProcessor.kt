@@ -162,7 +162,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         val enabled = TenBandEqSettings.enabled
         val gains = TenBandEqSettings.gains()
         if (enabled && !gains.contentEquals(lastGains)) updateCoefficients(gains)
-        val maxBoost = if (enabled) gains.maxOrNull()?.coerceAtLeast(0f) ?: 0f else 0f
+        val maxBoost = if (enabled) gains.filter { it > 0f }.sum() else 0f
         val preampDb = TenBandEqSettings.preampDb - if (TenBandEqSettings.autoHeadroom) maxBoost else 0f
         val preampLinear = 10.0.pow(preampDb.toDouble() / 20.0)
         val makeupLinear = 10.0.pow(TenBandEqSettings.compressorMakeupDb.toDouble() / 20.0)
