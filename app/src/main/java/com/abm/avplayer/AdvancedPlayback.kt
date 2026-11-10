@@ -23,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -217,6 +218,12 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
     var enabled by remember { mutableStateOf(TenBandEqSettings.enabled) }
     var levels by remember { mutableStateOf(TenBandEqSettings.gains().toList()) }
     var presetsOpen by remember { mutableStateOf(false) }
+    var preamp by remember { mutableStateOf(TenBandEqSettings.preampDb) }
+    var autoHeadroom by remember { mutableStateOf(TenBandEqSettings.autoHeadroom) }
+    var compressor by remember { mutableStateOf(TenBandEqSettings.compressorEnabled) }
+    var threshold by remember { mutableStateOf(TenBandEqSettings.compressorThresholdDb) }
+    var ratio by remember { mutableStateOf(TenBandEqSettings.compressorRatio) }
+    var makeup by remember { mutableStateOf(TenBandEqSettings.compressorMakeupDb) }
     val presets = listOf("Flat", "Bass Boost", "Treble Boost", "Rock", "Classical", "Jazz", "Vocal")
 
     fun applyGains(values: List<Float>) {
@@ -276,9 +283,49 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                 }
                 HorizontalDivider(color = Raised)
                 LazyColumn(
-                    modifier = Modifier.height(360.dp),
+                    modifier = Modifier.height(420.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("Output & dynamics", color = Cyan, fontWeight = FontWeight.SemiBold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Automatic EQ headroom", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                androidx.compose.material3.Switch(checked = autoHeadroom, onCheckedChange = {
+                                    autoHeadroom = it
+                                    TenBandEqSettings.autoHeadroom = it
+                                    TenBandEqSettings.save(context)
+                                })
+                            }
+                            Text("Preamp: %+.1f dB".format(preamp), color = Color.White, fontSize = 11.sp)
+                            Slider(value = preamp, onValueChange = {
+                                preamp = it; TenBandEqSettings.preampDb = it; TenBandEqSettings.save(context)
+                            }, valueRange = -12f..12f)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Dynamic-range compressor", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                androidx.compose.material3.Switch(checked = compressor, onCheckedChange = {
+                                    compressor = it
+                                    TenBandEqSettings.compressorEnabled = it
+                                    TenBandEqSettings.save(context)
+                                })
+                            }
+                            Text("Threshold: %.0f dB".format(threshold), color = Muted, fontSize = 11.sp)
+                            Slider(value = threshold, onValueChange = {
+                                threshold = it; TenBandEqSettings.compressorThresholdDb = it; TenBandEqSettings.save(context)
+                            }, valueRange = -36f..0f, enabled = compressor)
+                            Text("Ratio: %.1f:1".format(ratio), color = Muted, fontSize = 11.sp)
+                            Slider(value = ratio, onValueChange = {
+                                ratio = it; TenBandEqSettings.compressorRatio = it; TenBandEqSettings.save(context)
+                            }, valueRange = 1f..10f, enabled = compressor)
+                            Text("Make-up gain: %+.1f dB".format(makeup), color = Muted, fontSize = 11.sp)
+                            Slider(value = makeup, onValueChange = {
+                                makeup = it; TenBandEqSettings.compressorMakeupDb = it; TenBandEqSettings.save(context)
+                            }, valueRange = 0f..12f, enabled = compressor)
+                            Text("Headroom offsets the largest positive EQ band. The compressor uses peak-level detection; final PCM output is clamped to the valid sample range.", color = Muted, fontSize = 10.sp)
+                            HorizontalDivider(color = Raised)
+                            Text("10-band EQ", color = Cyan, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                     items(TenBandEqSettings.BAND_COUNT) { index ->
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
