@@ -276,6 +276,56 @@ class StreamingCentreActivity : ComponentActivity() {
                     }
                 }
             }
+                if (receiverPanel) {
+                    Dialog(onDismissRequest = { receiverPanel = false }) {
+                        Surface(Modifier.fillMaxWidth().heightIn(max = 620.dp), shape = RoundedCornerShape(22.dp), color = Panel) {
+                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("FIND TVs", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                                        Text("Google Cast · DLNA / UPnP · YouTube DIAL", color = Muted, fontSize = 10.sp)
+                                    }
+                                    TextButton(onClick = { refreshReceivers() }, enabled = !discoveryBusy) { Text("Refresh", color = Cyan) }
+                                }
+                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Raised).padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Google Cast / Chromecast", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text("Use Google's official receiver picker", color = Muted, fontSize = 10.sp)
+                                    }
+                                    AndroidView(factory = { context -> MediaRouteButton(context).also { button -> runCatching { CastButtonFactory.setUpMediaRouteButton(context, button) } } }, modifier = Modifier.size(48.dp))
+                                }
+                                if (discoveryBusy && receivers.isEmpty()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        CircularProgressIndicator(Modifier.size(18.dp), color = Cyan, strokeWidth = 2.dp)
+                                        Text("Searching local network…", color = Muted, fontSize = 12.sp)
+                                    }
+                                }
+                                if (receivers.isEmpty() && !discoveryBusy) Text("No DLNA or DIAL receivers found. Keep the TV awake and check that both devices use the same Wi-Fi network.", color = Muted, fontSize = 12.sp)
+                                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    lazyItems(receivers, key = { it.id }) { receiver ->
+                                        val selected = receiver.id == selectedReceiverId
+                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) Color(0xFF263B4A) else Raised).clickable { selectedReceiverId = receiver.id }.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(receiver.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                Text(receiver.protocolLabel + " · " + receiver.address, color = Cyan, fontSize = 10.sp)
+                                            }
+                                            RadioButton(selected = selected, onClick = { selectedReceiverId = receiver.id })
+                                        }
+                                    }
+                                }
+                                val selectedReceiver = receivers.firstOrNull { it.id == selectedReceiverId }
+                                if (selectedReceiver?.supportsDlna == true) {
+                                    Button(onClick = { requestDlnaCast(selectedReceiver, scope) { castMessage = it }; receiverPanel = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23675F))) { Text("Play current video on selected TV") }
+                                }
+                                if (selectedReceiver?.supportsDial == true) {
+                                    OutlinedButton(onClick = { launchDialYoutube(selectedReceiver, scope) { castMessage = it }; receiverPanel = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
+                                }
+                                Text("DRM-protected or encrypted streams cannot be extracted. Use the provider's own Cast control for those services.", color = Muted, fontSize = 10.sp)
+                                TextButton(onClick = { receiverPanel = false }, modifier = Modifier.align(Alignment.End)) { Text("Close", color = Cyan) }
+                            }
+                        }
+                    }
+                }
         }
     }
 
