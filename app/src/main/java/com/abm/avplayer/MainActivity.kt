@@ -460,13 +460,12 @@ class MainActivity : ComponentActivity() {
             localCastQueueServer?.close()
             localCastQueueServer = null
 
-            val currentItem = controllerState.value?.currentMediaItem
-            val currentConfig = currentItem?.localConfiguration
-            val selectedSubtitle = if (currentConfig?.uri == selected.let { Uri.parse(it.uri) }) {
-                currentConfig.subtitleConfigurations.firstOrNull { it.mimeType == MimeTypes.TEXT_VTT }
-            } else null
+            val currentConfig = controllerState.value?.currentMediaItem?.localConfiguration
+            val selectedSubtitle = currentConfig
+                ?.takeIf { it.uri == Uri.parse(selected.uri) }
+                ?.subtitleConfigurations
+                ?.firstOrNull { it.mimeType == MimeTypes.TEXT_VTT }
             val selectedSubtitleUri = selectedSubtitle?.uri
-            val selectedSubtitleMime = selectedSubtitle?.mimeType ?: MimeTypes.TEXT_VTT
             val localSources = supported.mapIndexedNotNull { index, item ->
                 if (item.second.scheme == "http" || item.second.scheme == "https") null
                 else LocalCastMediaSource("item$index", item.second, item.third)
