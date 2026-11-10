@@ -400,105 +400,199 @@ private fun LibraryTab(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun PlayerScreen(
-    title: String, player: Player?, hasMedia: Boolean, playing: Boolean,
-    position: Long, duration: Long, progress: Float,
-    onBrowse: () -> Unit, onLibrary: () -> Unit, onPlayPause: () -> Unit,
-    onPrevious: () -> Unit, onNext: () -> Unit, onSeek: (Float) -> Unit,
-    onShuffle: () -> Unit, onRepeat: () -> Unit
+    title: String,
+    player: Player?,
+    hasMedia: Boolean,
+    playing: Boolean,
+    position: Long,
+    duration: Long,
+    progress: Float,
+    onBrowse: () -> Unit,
+    onLibrary: () -> Unit,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit,
+    onPickSubtitle: () -> Unit,
+    fullscreen: Boolean,
+    onFullscreen: () -> Unit
 ) {
-    Column(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF111827), Canvas, Canvas)))
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
-                .background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Canvas)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("ABM", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-            }
-            IconButton(onClick = {}) { Icon(Icons.Default.Cast, contentDescription = "Cast", tint = Cyan) }
-            IconButton(onClick = {}) { Icon(Icons.Default.Tune, contentDescription = "Equalizer", tint = Muted) }
-        }
-        Column(
-            Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Panel),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                Modifier.fillMaxWidth().weight(1f).padding(12.dp).clip(RoundedCornerShape(19.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF202B40), Color(0xFF151C2B), Color(0xFF241D3D)))),
-                contentAlignment = Alignment.Center
-            ) {
-                if (hasMedia && player != null) {
-                    AndroidView(factory = { context ->
+    if (fullscreen) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            if (hasMedia && player != null) {
+                AndroidView(
+                    factory = { context ->
                         PlayerView(context).apply {
                             useController = false
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             this.player = player
                         }
-                    }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Cyan, modifier = Modifier.size(68.dp))
-                        Spacer(Modifier.height(10.dp))
-                        Text("YOUR MEDIA. YOUR SPACE.", color = Color.White.copy(alpha = .75f), fontSize = 10.sp, letterSpacing = 2.sp)
+                    },
+                    update = { it.player = player },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text("No video loaded", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            }
+            IconButton(
+                onClick = onFullscreen,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            ) {
+                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen", tint = Color.White)
+            }
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Color(0xCC090B12)).padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold)
+                Slider(
+                    value = progress.coerceIn(0f, 1f),
+                    onValueChange = onSeek,
+                    colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(formatTime(position), color = Muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onPrevious) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+                        }
+                        IconButton(onClick = onPlayPause) {
+                            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playing) "Pause" else "Play", tint = Cyan)
+                        }
+                        IconButton(onClick = onNext) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
+                        }
+                        AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
+                    }
+                    Text(formatTime(duration), color = Muted, fontSize = 11.sp)
+                }
+            }
+        }
+    } else {
+        Column(
+            Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color(0xFF111827), Canvas, Canvas)))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
+                    .background(Brush.linearGradient(listOf(Cyan, Violet))),
+                    contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Canvas)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("ABM", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                }
+                AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
+                IconButton(onClick = onFullscreen, enabled = hasMedia) {
+                    Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Cyan)
+                }
+            }
+            Column(
+                Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Panel),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().weight(1f).padding(12.dp).clip(RoundedCornerShape(19.dp))
+                        .background(Brush.linearGradient(
+                            listOf(Color(0xFF202B40), Color(0xFF151C2B), Color(0xFF241D3D))
+                        )),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (hasMedia && player != null) {
+                        AndroidView(
+                            factory = { context ->
+                                PlayerView(context).apply {
+                                    useController = false
+                                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    this.player = player
+                                }
+                            },
+                            update = { it.player = player },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.GraphicEq, contentDescription = null,
+                                tint = Cyan, modifier = Modifier.size(68.dp))
+                            Spacer(Modifier.height(10.dp))
+                            Text("YOUR MEDIA. YOUR SPACE.", color = Color.White.copy(alpha = .75f),
+                                fontSize = 10.sp, letterSpacing = 2.sp)
+                        }
+                    }
+                }
+                Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Slider(
+                    value = progress.coerceIn(0f, 1f),
+                    onValueChange = onSeek,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan,
+                        inactiveTrackColor = Raised)
+                )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTime(position), color = Muted, fontSize = 11.sp)
+                    Text(formatTime(duration), color = Muted, fontSize = 11.sp)
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onShuffle) {
+                        Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
+                            tint = if (player?.shuffleModeEnabled == true) Cyan else Muted)
+                    }
+                    IconButton(onClick = onPrevious) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
+                            tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Button(onClick = onPlayPause, shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Cyan),
+                        modifier = Modifier.size(64.dp), contentPadding = PaddingValues(0.dp)) {
+                        Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            tint = Canvas, modifier = Modifier.size(34.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    IconButton(onClick = onNext) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "Next",
+                            tint = Color.White, modifier = Modifier.size(30.dp))
+                    }
+                    IconButton(onClick = onRepeat) {
+                        Icon(Icons.Default.Repeat, contentDescription = "Repeat",
+                            tint = if (player?.repeatMode != Player.REPEAT_MODE_OFF) Cyan else Muted)
                     }
                 }
             }
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Slider(value = progress.coerceIn(0f, 1f), onValueChange = onSeek,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Raised))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatTime(position), color = Muted, fontSize = 11.sp)
-                Text(formatTime(duration), color = Muted, fontSize = 11.sp)
-            }
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onShuffle) {
-                    Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
-                        tint = if (player?.shuffleModeEnabled == true) Cyan else Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onBrowse, modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Cyan)
+                    Spacer(Modifier.width(8.dp)); Text("Open media", color = Color.White)
                 }
-                IconButton(onClick = onPrevious) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(30.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Button(onClick = onPlayPause, shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Cyan), modifier = Modifier.size(64.dp),
-                    contentPadding = PaddingValues(0.dp)) {
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Pause" else "Play", tint = Canvas, modifier = Modifier.size(34.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(30.dp))
-                }
-                IconButton(onClick = onRepeat) {
-                    Icon(Icons.Default.Repeat, contentDescription = "Repeat",
-                        tint = if (player?.repeatMode != Player.REPEAT_MODE_OFF) Cyan else Muted)
+                Button(onClick = onLibrary, modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet)
+                    Spacer(Modifier.width(8.dp)); Text("Library", color = Color.White)
                 }
             }
+            Text("ABM AV PLAYER  •  BUILT FOR YOUR MEDIA", Modifier.fillMaxWidth(),
+                color = Muted.copy(alpha = .7f), fontSize = 9.sp, letterSpacing = 1.2.sp)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onBrowse, modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
-                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Cyan)
-                Spacer(Modifier.width(8.dp)); Text("Open media", color = Color.White)
-            }
-            Button(onClick = onLibrary, modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet)
-                Spacer(Modifier.width(8.dp)); Text("Library", color = Color.White)
-            }
-        }
-        Text("ABM AV PLAYER  •  BUILT FOR YOUR MEDIA", Modifier.fillMaxWidth(),
-            color = Muted.copy(alpha = .7f), fontSize = 9.sp, letterSpacing = 1.2.sp)
     }
 }
 
