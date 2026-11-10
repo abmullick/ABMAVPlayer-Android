@@ -14,6 +14,7 @@ import com.abm.avplayer.audio.TenBandEqSettings
 import com.abm.avplayer.audio.ReplayGainMetadataParser
 import com.abm.avplayer.audio.TenBandEqualizerAudioProcessor
 
+@OptIn(UnstableApi::class)
 class PlayerService : MediaSessionService() {
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
