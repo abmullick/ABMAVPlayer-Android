@@ -36,7 +36,7 @@ data class StreamingReceiver(
 data class DlnaPlaybackStatus(val state: String, val position: String, val duration: String)
 data class DialApplicationStatus(val state: String, val detail: String)
 
-private data class YoutubeLoungeSession(val token: String, val sid: String, val gsessionId: String, val aid: String?, var requestId: Int = 2)
+private data class YoutubeLoungeSession(val token: String, val sid: String, val gsessionId: String, val aid: String?, var requestId: Int = 2, var commandOffset: Int = 1)
 
 object StreamingReceiverDiscovery {
     private val youtubeSessions = ConcurrentHashMap<String, YoutubeLoungeSession>()
@@ -274,13 +274,18 @@ object StreamingReceiverDiscovery {
         command: String,
         videoId: String?
     ) {
-        val requestId = synchronized(session) { session.requestId++ }
+        val (requestId, commandOffset) = synchronized(session) {
+            val current = session.requestId to session.commandOffset
+            session.requestId++
+            session.commandOffset++
+            current
+        }
         val body = if (command == "setPlaylist") {
             val id = videoId ?: error("Missing YouTube video ID.")
-            "count=1&ofs=1&req0__sc=setPlaylist&req0_currentIndex=0&req0_currentTime=0&req0_videoId=" +
+            "count=1&ofs=" + commandOffset + "&req0__sc=setPlaylist&req0_currentIndex=0&req0_currentTime=0&req0_videoId=" +
                 formEncode(id) + "&req0_videoIds=" + formEncode(id)
         } else {
-            "count=1&ofs=1&req0__sc=" + formEncode(command)
+            "count=1&ofs=" + commandOffset + "&req0__sc=" + formEncode(command)
         }
         val path = "/api/lounge/bc/bind?CVER=1&RID=" + requestId +
             "&VER=8&SID=" + formEncode(session.sid) +
