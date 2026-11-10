@@ -127,6 +127,7 @@ class StreamingCentreActivity : ComponentActivity() {
             var receiverDialAppState by remember { mutableStateOf("Unknown") }
             var dialApplications by remember { mutableStateOf<List<DialApplicationInfo>>(emptyList()) }
             var dialApplicationsBusy by remember { mutableStateOf(false) }
+            var dialAppNameInput by remember { mutableStateOf("YouTube") }
             var youtubeRemotePlaybackState by remember { mutableStateOf("Not paired") }
             var youtubeRemotePosition by remember { mutableDoubleStateOf(0.0) }
             var youtubeRemoteDuration by remember { mutableDoubleStateOf(0.0) }
@@ -225,16 +226,21 @@ class StreamingCentreActivity : ComponentActivity() {
                     } finally { receiverReconnectBusy = false }
                 }
             }
-            fun loadDialApplications(receiver: StreamingReceiver) {
+            fun checkDialApplication(receiver: StreamingReceiver, applicationName: String) {
                 if (!receiver.supportsDial) return
+                val appName = applicationName.trim()
+                if (appName.isBlank()) {
+                    castMessage = "Enter a registered DIAL application name first."
+                    return
+                }
                 dialApplicationsBusy = true
                 scope.launch {
-                    StreamingReceiverDiscovery.getDialApplications(receiver)
-                        .onSuccess {
-                            dialApplications = it
-                            castMessage = if (it.isEmpty()) "The TV did not advertise any DIAL applications." else "Found ${it.size} DIAL application(s) on ${receiver.name}."
+                    StreamingReceiverDiscovery.getDialApplicationStatus(receiver, appName)
+                        .onSuccess { status ->
+                            dialApplications = listOf(DialApplicationInfo(appName, status.state, status.detail))
+                            castMessage = appName + ": " + status.state.lowercase()
                         }
-                        .onFailure { castMessage = "Could not list TV apps: ${it.message ?: "DIAL error"}" }
+                        .onFailure { castMessage = "Could not check DIAL app: ${it.message ?: "receiver error"}" }
                     dialApplicationsBusy = false
                 }
             }
@@ -785,31 +791,36 @@ class StreamingCentreActivity : ComponentActivity() {
                                 }
                                 val selectedReceiver = receivers.firstOrNull { it.id == selectedReceiverId }
                                 if (selectedReceiver?.supportsDial == true) {
+                                    Text("DIAL does not provide a TV-wide installed-app list. Check a registered app name; the TV will report whether it supports that app.", color = Muted, fontSize = 10.sp)
+                                    OutlinedTextField(
+                                        value = dialAppNameInput,
+                                        onValueChange = { dialAppNameInput = it },
+                                        label = { Text("DIAL application name") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                     OutlinedButton(
                                         onClick = {
                                             activeReceiver = selectedReceiver
                                             receiverConnectionState = "Connecting…"
-                                            loadDialApplications(selectedReceiver)
+                                            checkDialApplication(selectedReceiver, dialAppNameInput)
                                         },
                                         enabled = !dialApplicationsBusy,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
-                                    ) { Text(if (dialApplicationsBusy) "Loading TV apps…" else "Load apps exposed by this TV") }
+                                    ) { Text(if (dialApplicationsBusy) "Checking app…" else "Check DIAL app") }
                                     if (dialApplications.isNotEmpty() && activeReceiver?.id == selectedReceiver.id) {
-                                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 170.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                            lazyItems(dialApplications, key = { it.name }) { app ->
-                                                Row(
-                                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Raised).padding(horizontal = 8.dp, vertical = 6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Column(Modifier.weight(1f)) {
-                                                        Text(app.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                                        Text(app.state + " · " + app.detail, color = Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    }
-                                                    TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, true) }, enabled = !receiverControlBusy) { Text("Launch", color = Cyan, fontSize = 10.sp) }
-                                                    TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, false) }, enabled = !receiverControlBusy && app.state.equals("RUNNING", true)) { Text("Stop", color = Cyan, fontSize = 10.sp) }
-                                                }
+                                        val app = dialApplications.first()
+                                        Row(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Raised).padding(horizontal = 8.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(app.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(app.state + " · " + app.detail, color = Muted, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                             }
+                                            TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, true) }, enabled = !receiverControlBusy && !app.state.equals("UNAVAILABLE", true)) { Text("Launch", color = Cyan, fontSize = 10.sp) }
+                                            TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, false) }, enabled = !receiverControlBusy && app.state.equals("RUNNING", true)) { Text("Stop", color = Cyan, fontSize = 10.sp) }
                                         }
                                     }
                                 }
