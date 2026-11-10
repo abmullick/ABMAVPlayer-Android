@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> This repository is being initialized. The first milestone establishes the Android application foundation and playback experience; it does not yet claim complete Windows feature parity. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation and first media-library milestone are implemented. Windows feature parity remains an active roadmap; the current build does not yet include casting, advanced audio processing, M3U import/export or the Streaming Centre. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
@@ -50,7 +50,7 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 ## Planned milestones
 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
-2. **Library:** device media indexing, artwork, playlists, M3U import/export, queue, history, shuffle and repeat.
+2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
 3. **Playback tools:** speed control, audio/subtitle track selection, external subtitles and equalizer.
 4. **Casting:** Google Cast discovery, device picker, remote playback state and recovery.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
