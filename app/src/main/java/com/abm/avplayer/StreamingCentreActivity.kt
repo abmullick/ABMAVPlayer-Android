@@ -394,7 +394,7 @@ class StreamingCentreActivity : ComponentActivity() {
 
     override fun onDestroy() {
         hideCustomView()
-        browser?.apply { stopLoading(); webChromeClient = null; webViewClient = null; destroy() }
+        browser?.apply { stopLoading(); webChromeClient = null; destroy() }
         browser = null
         super.onDestroy()
     }
