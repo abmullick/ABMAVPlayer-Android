@@ -43,3 +43,10 @@ Use a dedicated Android WebView with provider navigation, safe browsing controls
 - Use HTTPS for network media by default.
 - Never collect provider credentials.
 - Do not store cookies outside the WebView profile or expose them to casting code.
+
+
+## Background Cast streaming lifecycle
+
+- Imported media and sidecar subtitle HTTP endpoints are owned by `CastStreamService`, a dedicated `mediaPlayback` foreground service. They are no longer closed by `MainActivity.onDestroy()`, so screen changes and Activity teardown do not immediately interrupt a receiver's stream.
+- The service displays an ongoing Cast notification and acquires a partial CPU wake lock plus a high-performance Wi-Fi lock only while a local LAN endpoint is active. These locks are released when the endpoint is cleared or the Cast session ends; continuous casting therefore has a battery cost.
+- The service is non-sticky. If Android terminates the app process, the in-memory HTTP server and its random endpoint are lost. The remote receiver cannot continue fetching that stream after process death; the user must reconnect and select the media again. Device-vendor battery policies and physical screen-off playback still require testing.
