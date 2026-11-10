@@ -212,7 +212,8 @@ class StreamingCentreActivity : ComponentActivity() {
                             youtubeRemotePlaybackState = when (action) {
                                 "play" -> "Playing"
                                 "pause" -> "Paused"
-                                else -> "Stopped"
+                                "stop" -> "Stopped"
+                                else -> youtubeRemotePlaybackState
                             }
                             castMessage = "YouTube " + action + " command sent to " + receiver.name
                         }
@@ -495,9 +496,11 @@ class StreamingCentreActivity : ComponentActivity() {
                                         }
                                     }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
                                     if (youtubeRemoteReady) {
+                                        TextButton(onClick = { controlYoutubeRemote("previous") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Previous", color = Cyan) }
                                         TextButton(onClick = { controlYoutubeRemote(if (youtubeRemotePlaybackState == "Playing") "pause" else "play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) {
                                             Text(if (youtubeRemotePlaybackState == "Playing") "Pause" else "Resume", color = Cyan)
                                         }
+                                        TextButton(onClick = { controlYoutubeRemote("next") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Next", color = Cyan) }
                                         TextButton(onClick = { controlYoutubeRemote("stop") }, enabled = !receiverControlBusy) { Text("Stop video", color = Cyan) }
                                     }
                                     TextButton(onClick = {
