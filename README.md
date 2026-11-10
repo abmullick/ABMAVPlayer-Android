@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; casting, the Streaming Centre, M3U import/export and a consistent app-owned ten-band DSP equalizer are not yet included. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; casting, the Streaming Centre, M3U import/export and ReplayGain/compressor processing are not yet included. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
