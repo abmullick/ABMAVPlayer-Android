@@ -71,10 +71,12 @@ class LocalMediaQueueHttpServer(
                 .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
                 .map { network.name.lowercase() to it.hostAddress }
         }
+        CastDiagnostics.info("HTTP_SERVER: queue network interfaces=${addresses.joinToString { (name, ip) -> "$name=$ip" }}")
         val address = addresses.firstOrNull { (name, _) ->
             name.startsWith("wlan") || name.startsWith("wifi") || name.startsWith("eth")
         }?.second ?: addresses.firstOrNull()?.second
             ?: error("No reachable Wi-Fi/LAN IPv4 address found")
+        CastDiagnostics.info("HTTP_SERVER: queue selected receiver-facing address=$address; port=${server?.localPort}")
         return "http://$address:${server?.localPort}"
     }
 
@@ -86,7 +88,9 @@ class LocalMediaQueueHttpServer(
             val request = readLine(input)?.split(" ") ?: return
             val path = request.getOrNull(1).orEmpty().trimStart('/').split("/")
             val entry = if (path.size == 2 && path[0] == token) entries[path[1]] else null
+            CastDiagnostics.info("HTTP_REQUEST: queue; method=${request.firstOrNull()}; itemMatched=${entry != null}")
             if (entry == null) {
+                CastDiagnostics.warn("HTTP_REQUEST: queue rejected unknown item path")
                 output.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".toByteArray())
                 output.flush()
                 return
@@ -124,6 +128,7 @@ class LocalMediaQueueHttpServer(
                 }
             }
             val length = end - start + 1L
+            CastDiagnostics.info("HTTP_REQUEST: serving queue item=${entry.source.id}; method=$method; range=${rangeHeader ?: "none"}; start=$start; bytes=$length; total=$total")
             output.write(buildString {
                 append(if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n")
                 append("Content-Type: ${entry.source.contentType}\r\n")
@@ -156,6 +161,7 @@ class LocalMediaQueueHttpServer(
                     remaining -= count
                 }
                 output.flush()
+                CastDiagnostics.info("HTTP_REQUEST: completed queue transfer; item=${entry.source.id}; requestedBytes=$length; remainingBytes=$remaining")
             }
         }
     }
