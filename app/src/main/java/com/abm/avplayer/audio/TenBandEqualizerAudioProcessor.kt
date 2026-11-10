@@ -114,7 +114,8 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
     private var lastGains = FloatArray(TenBandEqSettings.BAND_COUNT) { Float.NaN }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT ||
+        if ((inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
+                inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) ||
             inputAudioFormat.sampleRate <= 0 || inputAudioFormat.channelCount <= 0
         ) {
             return AudioProcessor.AudioFormat.NOT_SET
@@ -137,18 +138,35 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         val gains = TenBandEqSettings.gains()
         if (enabled && !gains.contentEquals(lastGains)) updateCoefficients(gains)
 
-        while (input.remaining() >= 2 * channelCount) {
-            for (channel in 0 until channelCount) {
-                val raw = input.short.toInt()
-                if (!enabled) {
-                    output.putShort(raw.toShort())
-                } else {
-                    var sample = raw / 32768.0
-                    for (band in coefficients.indices) {
-                        sample = states[band][channel].process(sample, coefficients[band])
+        if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) {
+            while (input.remaining() >= 4 * channelCount) {
+                for (channel in 0 until channelCount) {
+                    val raw = input.float
+                    if (!enabled) {
+                        output.putFloat(raw)
+                    } else {
+                        var sample = raw.toDouble()
+                        for (band in coefficients.indices) {
+                            sample = states[band][channel].process(sample, coefficients[band])
+                        }
+                        output.putFloat(sample.toFloat().coerceIn(-1f, 1f))
                     }
-                    val scaled = (sample * 32768.0).toInt().coerceIn(-32768, 32767)
-                    output.putShort(scaled.toShort())
+                }
+            }
+        } else {
+            while (input.remaining() >= 2 * channelCount) {
+                for (channel in 0 until channelCount) {
+                    val raw = input.short.toInt()
+                    if (!enabled) {
+                        output.putShort(raw.toShort())
+                    } else {
+                        var sample = raw / 32768.0
+                        for (band in coefficients.indices) {
+                            sample = states[band][channel].process(sample, coefficients[band])
+                        }
+                        val scaled = (sample * 32768.0).toInt().coerceIn(-32768, 32767)
+                        output.putShort(scaled.toShort())
+                    }
                 }
             }
         }
