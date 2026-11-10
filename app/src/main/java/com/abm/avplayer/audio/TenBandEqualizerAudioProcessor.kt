@@ -214,6 +214,8 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
             val compressedDb = if (envelopeDb > thresholdDb) thresholdDb + (envelopeDb - thresholdDb) / ratio else envelopeDb
             val gainDb = (compressedDb - envelopeDb).coerceAtMost(0.0)
             sample *= 10.0.pow(gainDb / 20.0) * makeup
+        } else {
+            compressorEnvelope[channel] = 0.0
         }
         return sample
     }
