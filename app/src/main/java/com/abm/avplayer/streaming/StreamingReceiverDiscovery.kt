@@ -166,6 +166,7 @@ object StreamingReceiverDiscovery {
                 soap(endpoint, serviceType, "SetAVTransportURI",
                     "<InstanceID>0</InstanceID><CurrentURI>${xmlEscape(mediaUrl)}</CurrentURI><CurrentURIMetaData>$metadata</CurrentURIMetaData>")
                 soap(endpoint, serviceType, "Play", "<InstanceID>0</InstanceID><Speed>1</Speed>")
+                Unit
             }
         }
 
@@ -217,6 +218,7 @@ object StreamingReceiverDiscovery {
                 val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
                 val args = if (action == "Play") "<InstanceID>0</InstanceID><Speed>1</Speed>" else "<InstanceID>0</InstanceID>"
                 soap(endpoint, serviceType, action, args)
+                Unit
             }
         }
 
@@ -227,6 +229,7 @@ object StreamingReceiverDiscovery {
                 val endpoint = checkedControlEndpoint(receiver)
                 val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
                 soap(endpoint, serviceType, "Seek", "<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>$target</Target>")
+                Unit
             }
         }
 
