@@ -190,7 +190,7 @@ object StreamingReceiverDiscovery {
                 } finally { launch.disconnect() }
 
                 var screenId: String? = null
-                repeat(6) {
+                for (attempt in 0 until 6) {
                     val status = openPrivateHttp(endpoint, "GET")
                     if (status != null) {
                         try {
@@ -203,7 +203,8 @@ object StreamingReceiverDiscovery {
                             }
                         } finally { status.disconnect() }
                     }
-                    if (screenId.isNullOrBlank()) Thread.sleep(500)
+                    if (!screenId.isNullOrBlank()) break
+                    Thread.sleep(500)
                 }
                 val resolvedScreenId = screenId?.takeIf { it.isNotBlank() }
                     ?: error("YouTube started, but the TV did not expose its screen ID.")
@@ -240,7 +241,7 @@ object StreamingReceiverDiscovery {
             runCatching {
                 require(action in setOf("play", "pause", "stop")) { "Unsupported YouTube remote command." }
                 val session = youtubeSessions[receiver.id] ?: error("YouTube remote control is not paired. Launch a video first.")
-                sendYoutubeLoungeCommand(receiver, session, action, null)
+                sendYoutubeLoungeCommand(receiver, session, if (action == "stop") "stopVideo" else action, null)
             }
         }
 
