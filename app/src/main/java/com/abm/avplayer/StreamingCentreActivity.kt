@@ -24,7 +24,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateColor
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -146,24 +146,17 @@ class StreamingCentreActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
             val hasSelectedReceiver = receivers.any { it.id == selectedReceiverId }
             val findTvPulse = rememberInfiniteTransition(label = "find-tv-selected-pulse")
-            val findTvPulseTint by findTvPulse.animateColor(
-                initialValue = Color(0xFFFF3030),
-                targetValue = Color(0xFFFF8585),
+            val findTvPulseProgress by findTvPulse.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
-                label = "find-tv-pulse-tint"
+                label = "find-tv-pulse-progress"
             )
-            val findTvPulseBackground by findTvPulse.animateColor(
-                initialValue = Color(0x14FF3030),
-                targetValue = Color(0x40FF3030),
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "find-tv-pulse-background"
-            )
+            val findTvPulseTint = Color(0xFFFF3030).copy(alpha = 0.72f + 0.28f * findTvPulseProgress)
+            val findTvPulseBackground = Color(0xFFFF3030).copy(alpha = 0.08f + 0.17f * findTvPulseProgress)
 
             fun controlGoogleCast(action: String, targetPositionMs: Long? = null) {
                 val remote = runCatching {
