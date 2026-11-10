@@ -270,9 +270,9 @@ class MainActivity : ComponentActivity() {
                                 if (remote != null && duration > 0L) remote.seek(MediaSeekOptions.Builder().setPosition((duration * value).toLong()).build())
                                 else if (duration > 0L) controller?.seekTo((duration * value).toLong())
                             },
-                            onShuffle = { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } },
+                            onShuffle = { if (!castConnected) controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } },
                             onRepeat = {
-                                controller?.let {
+                                if (!castConnected) controller?.let {
                                     it.repeatMode = when (it.repeatMode) {
                                         Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                                         Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
@@ -607,11 +607,14 @@ private fun PlayerScreen(
             } else {
                 Text("No video loaded", color = Color.White, modifier = Modifier.align(Alignment.Center))
             }
-            IconButton(
-                onClick = onFullscreen,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen", tint = Color.White)
+                CastRouteButton()
+                IconButton(onClick = onFullscreen) {
+                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen", tint = Color.White)
+                }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -725,11 +728,11 @@ private fun PlayerScreen(
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onShuffle) {
+                    IconButton(onClick = onShuffle, enabled = !castConnected) {
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
                             tint = if (player?.shuffleModeEnabled == true) Cyan else Muted)
                     }
-                    IconButton(onClick = onPrevious) {
+                    IconButton(onClick = onPrevious, enabled = !castConnected) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
                             tint = Color.White, modifier = Modifier.size(30.dp))
                     }
@@ -742,11 +745,11 @@ private fun PlayerScreen(
                             tint = Canvas, modifier = Modifier.size(34.dp))
                     }
                     Spacer(Modifier.width(12.dp))
-                    IconButton(onClick = onNext) {
+                    IconButton(onClick = onNext, enabled = !castConnected) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next",
                             tint = Color.White, modifier = Modifier.size(30.dp))
                     }
-                    IconButton(onClick = onRepeat) {
+                    IconButton(onClick = onRepeat, enabled = !castConnected) {
                         Icon(Icons.Default.Repeat, contentDescription = "Repeat",
                             tint = if (player?.repeatMode != Player.REPEAT_MODE_OFF) Cyan else Muted)
                     }
