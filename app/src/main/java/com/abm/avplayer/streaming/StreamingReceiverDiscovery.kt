@@ -241,6 +241,10 @@ object StreamingReceiverDiscovery {
     fun hasYoutubeRemoteSession(receiver: StreamingReceiver): Boolean =
         youtubeSessions.containsKey(receiver.id)
 
+    fun clearYoutubeRemoteSession(receiver: StreamingReceiver) {
+        youtubeSessions.remove(receiver.id)
+    }
+
     suspend fun controlYoutubeLounge(receiver: StreamingReceiver, action: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
