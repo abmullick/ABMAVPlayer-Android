@@ -36,6 +36,12 @@ object TenBandEqSettings {
     @Volatile var compressorAttackMs: Float = 10f
     @Volatile var compressorReleaseMs: Float = 120f
     @Volatile var compressorMakeupDb: Float = 0f
+    @Volatile var replayGainEnabled: Boolean = false
+    @Volatile var replayGainMode: String = "TRACK"
+    @Volatile var replayGainTrackDb: Float? = null
+    @Volatile var replayGainAlbumDb: Float? = null
+    @Volatile var replayGainTrackPeak: Float? = null
+    @Volatile var replayGainAlbumPeak: Float? = null
 
     fun gains(): FloatArray = currentGains.copyOf()
 
@@ -70,6 +76,8 @@ object TenBandEqSettings {
         compressorAttackMs = preferences.getFloat("compressor_attack_ms", 10f).coerceIn(1f, 100f)
         compressorReleaseMs = preferences.getFloat("compressor_release_ms", 120f).coerceIn(10f, 1000f)
         compressorMakeupDb = preferences.getFloat("compressor_makeup_db", 0f).coerceIn(0f, 12f)
+        replayGainEnabled = preferences.getBoolean("replaygain_enabled", false)
+        replayGainMode = preferences.getString("replaygain_mode", "TRACK") ?: "TRACK"
     }
 
     fun save(context: Context) {
@@ -85,7 +93,39 @@ object TenBandEqSettings {
             .putFloat("compressor_attack_ms", compressorAttackMs)
             .putFloat("compressor_release_ms", compressorReleaseMs)
             .putFloat("compressor_makeup_db", compressorMakeupDb)
+            .putBoolean("replaygain_enabled", replayGainEnabled)
+            .putString("replaygain_mode", replayGainMode)
             .apply()
+    }
+
+    fun updateReplayGain(tags: ReplayGainTags) {
+        replayGainTrackDb = tags.trackGainDb
+        replayGainAlbumDb = tags.albumGainDb
+        replayGainTrackPeak = tags.trackPeak
+        replayGainAlbumPeak = tags.albumPeak
+    }
+
+    fun resetReplayGainForTrack() {
+        replayGainTrackDb = null
+        replayGainAlbumDb = null
+        replayGainTrackPeak = null
+        replayGainAlbumPeak = null
+    }
+
+    fun selectedReplayGainDb(): Float {
+        if (!replayGainEnabled) return 0f
+        val gain = when (replayGainMode) {
+            "ALBUM" -> replayGainAlbumDb ?: replayGainTrackDb
+            else -> replayGainTrackDb ?: replayGainAlbumDb
+        } ?: return 0f
+        val peak = when (replayGainMode) {
+            "ALBUM" -> replayGainAlbumPeak ?: replayGainTrackPeak
+            else -> replayGainTrackPeak ?: replayGainAlbumPeak
+        }
+        val peakSafeGain = peak?.takeIf { it > 1f }?.let {
+            (-20.0 * kotlin.math.log10(it.toDouble())).toFloat()
+        }
+        return (peakSafeGain?.let { minOf(gain, it) } ?: gain).coerceIn(-24f, 18f)
     }
 
     fun applyPreset(name: String): FloatArray {
@@ -164,7 +204,8 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         if (enabled && !gains.contentEquals(lastGains)) updateCoefficients(gains)
         val maxBoost = if (enabled) gains.maxOrNull()?.coerceAtLeast(0f) ?: 0f else 0f
         val preampDb = TenBandEqSettings.preampDb - if (TenBandEqSettings.autoHeadroom) maxBoost else 0f
-        val preampLinear = 10.0.pow(preampDb.toDouble() / 20.0)
+        val replayGainDb = TenBandEqSettings.selectedReplayGainDb()
+        val preampLinear = 10.0.pow((preampDb + replayGainDb).toDouble() / 20.0)
         val makeupLinear = 10.0.pow(TenBandEqSettings.compressorMakeupDb.toDouble() / 20.0)
         val attack = kotlin.math.exp(-1.0 / (sampleRateHz * TenBandEqSettings.compressorAttackMs / 1000.0).coerceAtLeast(1.0))
         val release = kotlin.math.exp(-1.0 / (sampleRateHz * TenBandEqSettings.compressorReleaseMs / 1000.0).coerceAtLeast(1.0))
