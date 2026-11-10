@@ -336,7 +336,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                 if (receiver.supportsDlna) {
                                     TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("-30s", color = Cyan) }
                                     if (receiverPlaybackState.equals("PLAYING", true)) {
-                                        TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Pause", color = Cyan) }
+                                        TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("Pause", color = Cyan) }
                                     } else {
                                         TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Resume / Play", color = Cyan) }
                                     }
