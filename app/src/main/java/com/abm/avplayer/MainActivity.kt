@@ -79,6 +79,9 @@ class MainActivity : ComponentActivity() {
     private val castConnectedState = mutableStateOf(false)
     private val castDeviceNameState = mutableStateOf("")
     private val castMessageState = mutableStateOf("")
+    private val castShuffleState = mutableStateOf(false)
+    private val castRepeatModeState = mutableIntStateOf(Player.REPEAT_MODE_OFF)
+    private var castOriginalFutureOrder: List<Int>? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
 
@@ -114,6 +117,8 @@ class MainActivity : ComponentActivity() {
             val castConnected by castConnectedState
             val castDeviceName by castDeviceNameState
             val castMessage by castMessageState
+            val castShuffleEnabled by castShuffleState
+            val castRepeatMode by castRepeatModeState
 
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenMultipleDocuments()
@@ -193,6 +198,11 @@ class MainActivity : ComponentActivity() {
                             val status = remote.mediaStatus
                             remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE)?.let { title = it }
                             playing = status?.playerState == MediaStatus.PLAYER_STATE_PLAYING
+                            castRepeatModeState.intValue = when (status?.queueRepeatMode) {
+                                MediaStatus.REPEAT_MODE_REPEAT_ALL -> Player.REPEAT_MODE_ALL
+                                MediaStatus.REPEAT_MODE_REPEAT_SINGLE -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
                             position = remote.approximateStreamPosition.coerceAtLeast(0L)
                             duration = remote.streamDuration.coerceAtLeast(0L)
                             if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
@@ -261,6 +271,7 @@ class MainActivity : ComponentActivity() {
                             castConnected = castConnected, castDeviceName = castDeviceName, castMessage = castMessage,
                             hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
+                            castShuffleEnabled = castShuffleEnabled, castRepeatMode = castRepeatMode,
                             progress = progress,
                             onBrowse = { picker.launch(arrayOf("audio/*", "video/*")) },
                             onLibrary = { page = "library" },
@@ -281,9 +292,19 @@ class MainActivity : ComponentActivity() {
                                 if (remote != null && duration > 0L) remote.seek(MediaSeekOptions.Builder().setPosition((duration * value).toLong()).build())
                                 else if (duration > 0L) controller?.seekTo((duration * value).toLong())
                             },
-                            onShuffle = { if (!castConnected) controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } },
+                            onShuffle = {
+                                if (castConnected) setCastShuffleEnabled(!castShuffleState.value)
+                                else controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+                            },
                             onRepeat = {
-                                if (!castConnected) controller?.let {
+                                if (castConnected) {
+                                    val next = when (castRepeatModeState.intValue) {
+                                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                        else -> Player.REPEAT_MODE_OFF
+                                    }
+                                    setCastRepeatMode(next)
+                                } else controller?.let {
                                     it.repeatMode = when (it.repeatMode) {
                                         Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                                         Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
@@ -360,6 +381,9 @@ class MainActivity : ComponentActivity() {
                     castConnectedState.value = false
                     castDeviceNameState.value = ""
                     castMessageState.value = "Disconnected"
+                    castShuffleState.value = false
+                    castRepeatModeState.intValue = Player.REPEAT_MODE_OFF
+                    castOriginalFutureOrder = null
                     localCastServer?.close()
                     localCastServer = null
                     localCastQueueServer?.close()
@@ -465,6 +489,65 @@ class MainActivity : ComponentActivity() {
             localCastQueueServer?.close()
             localCastQueueServer = null
             castMessageState.value = "Cast queue failed: ${it.message}"
+        }
+    }
+
+    private fun setCastShuffleEnabled(enabled: Boolean) {
+        val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient ?: return
+        val status = remote.mediaStatus ?: return
+        val items = status.queueItems.orEmpty()
+        if (items.size < 3) {
+            castMessageState.value = "Shuffle needs at least three queued items"
+            return
+        }
+        val currentIndex = items.indexOfFirst { it.itemId == status.currentItemId }
+        if (currentIndex < 0 || currentIndex >= items.lastIndex) {
+            castMessageState.value = "No upcoming items available to shuffle"
+            return
+        }
+        val futureIds = items.drop(currentIndex + 1).map { it.itemId }
+        if (enabled) {
+            castOriginalFutureOrder = futureIds
+            remote.queueReorderItems(futureIds.shuffled().toIntArray(), MediaQueueItem.INVALID_ITEM_ID, null)
+                .setResultCallback { result ->
+                    if (result.status.isSuccess) {
+                        castShuffleState.value = true
+                        castMessageState.value = "Shuffle enabled on TV"
+                    } else castMessageState.value = "TV could not shuffle the queue (error ${result.status.statusCode})"
+                }
+        } else {
+            val original = castOriginalFutureOrder
+            if (original.isNullOrEmpty()) {
+                castShuffleState.value = false
+                castMessageState.value = "Shuffle disabled; current queue order retained"
+                return
+            }
+            remote.queueReorderItems(original.toIntArray(), MediaQueueItem.INVALID_ITEM_ID, null)
+                .setResultCallback { result ->
+                    if (result.status.isSuccess) {
+                        castShuffleState.value = false
+                        castMessageState.value = "Original upcoming order restored"
+                    } else castMessageState.value = "TV could not restore queue order (error ${result.status.statusCode})"
+                }
+        }
+    }
+
+    private fun setCastRepeatMode(mode: Int) {
+        val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient ?: return
+        val castMode = when (mode) {
+            Player.REPEAT_MODE_ALL -> MediaStatus.REPEAT_MODE_REPEAT_ALL
+            Player.REPEAT_MODE_ONE -> MediaStatus.REPEAT_MODE_REPEAT_SINGLE
+            else -> MediaStatus.REPEAT_MODE_REPEAT_OFF
+        }
+        remote.queueSetRepeatMode(castMode, null).setResultCallback { result ->
+            if (result.status.isSuccess) {
+                castRepeatModeState.intValue = mode
+                castMessageState.value = when (mode) {
+                    Player.REPEAT_MODE_ALL -> "Repeat all enabled on TV"
+                    Player.REPEAT_MODE_ONE -> "Repeat current item enabled on TV"
+                    else -> "Repeat disabled on TV"
+                }
+            } else castMessageState.value = "TV could not change repeat mode (error ${result.status.statusCode})"
         }
     }
 
@@ -677,6 +760,8 @@ private fun PlayerScreen(
     player: Player?,
     hasVideo: Boolean,
     playing: Boolean,
+    castShuffleEnabled: Boolean,
+    castRepeatMode: Int,
     position: Long,
     duration: Long,
     progress: Float,
@@ -836,9 +921,9 @@ private fun PlayerScreen(
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onShuffle, enabled = !castConnected) {
+                    IconButton(onClick = onShuffle, enabled = true) {
                         Icon(Icons.Default.Shuffle, contentDescription = "Shuffle",
-                            tint = if (player?.shuffleModeEnabled == true) Cyan else Muted)
+                            tint = if (if (castConnected) castShuffleEnabled else player?.shuffleModeEnabled == true) Cyan else Muted)
                     }
                     IconButton(onClick = onPrevious, enabled = true) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
@@ -857,9 +942,9 @@ private fun PlayerScreen(
                         Icon(Icons.Default.SkipNext, contentDescription = "Next",
                             tint = Color.White, modifier = Modifier.size(30.dp))
                     }
-                    IconButton(onClick = onRepeat, enabled = !castConnected) {
+                    IconButton(onClick = onRepeat, enabled = true) {
                         Icon(Icons.Default.Repeat, contentDescription = "Repeat",
-                            tint = if (player?.repeatMode != Player.REPEAT_MODE_OFF) Cyan else Muted)
+                            tint = if (if (castConnected) castRepeatMode != Player.REPEAT_MODE_OFF else player?.repeatMode != Player.REPEAT_MODE_OFF) Cyan else Muted)
                     }
                 }
             }
