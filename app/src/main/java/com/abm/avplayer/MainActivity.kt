@@ -46,10 +46,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.abm.avplayer.casting.LocalMediaHttpServer
 import com.abm.avplayer.casting.CastStreamService
 import com.abm.avplayer.casting.LocalCastMediaSource
-import com.abm.avplayer.casting.LocalMediaQueueHttpServer
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaQueueItem
 import com.google.android.gms.cast.MediaTrack
@@ -411,6 +409,7 @@ class MainActivity : ComponentActivity() {
             if (!castStreamBound) error("Android could not bind the Cast stream service")
         }.onFailure {
             pendingCastStreamCallbacks.clear()
+            runCatching { stopService(intent) }
             castMessageState.value = "Could not start background Cast streaming: ${it.message}"
         }
     }
