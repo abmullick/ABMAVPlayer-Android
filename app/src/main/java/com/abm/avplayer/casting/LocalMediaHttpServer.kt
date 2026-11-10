@@ -34,11 +34,14 @@ class LocalMediaHttpServer(
             ?: error("Cannot open the selected media document")
         fileLength = afd.length
         afd.close()
+        CastDiagnostics.info("HTTP_SERVER: opened source document; lengthBytes=$fileLength; mime=$contentType")
         if (fileLength <= 0L) {
+            CastDiagnostics.warn("HTTP_SERVER: source has no positive seekable length")
             error("This media provider does not expose a seekable file length")
         }
         val socket = ServerSocket(0, 8, java.net.InetAddress.getByName("0.0.0.0"))
         server = socket
+        CastDiagnostics.info("HTTP_SERVER: listening on 0.0.0.0:${socket.localPort}")
         running.set(true)
         Thread({
             while (running.get()) {
@@ -61,10 +64,12 @@ class LocalMediaHttpServer(
                 .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
                 .map { network.name.lowercase() to it.hostAddress }
         }
+        CastDiagnostics.info("HTTP_SERVER: network interfaces=${addresses.joinToString { (name, ip) -> "$name=$ip" }}")
         val address = addresses.firstOrNull { (name, _) ->
             name.startsWith("wlan") || name.startsWith("wifi") || name.startsWith("eth")
         }?.second ?: addresses.firstOrNull()?.second
             ?: error("No reachable Wi-Fi/LAN IPv4 address found")
+        CastDiagnostics.info("HTTP_SERVER: selected receiver-facing address=$address; port=${server?.localPort}")
         return "http://$address:${server?.localPort}/$accessToken/media"
     }
 
@@ -75,7 +80,9 @@ class LocalMediaHttpServer(
             val output = BufferedOutputStream(client.getOutputStream())
             val requestLine = readLine(input) ?: return
             val parts = requestLine.split(" ")
+            CastDiagnostics.info("HTTP_REQUEST: single; method=${parts.firstOrNull()}; pathMatched=${parts.getOrNull(1) == "/$accessToken/media"}")
             if (parts.size < 2 || parts[1] != "/$accessToken/media") {
+                CastDiagnostics.warn("HTTP_REQUEST: rejected unknown path on single endpoint")
                 output.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".toByteArray())
                 output.flush()
                 return
@@ -107,6 +114,7 @@ class LocalMediaHttpServer(
                 }
             }
             val length = end - start + 1L
+            CastDiagnostics.info("HTTP_REQUEST: serving single; method=${parts[0]}; range=${rangeHeader ?: "none"}; start=$start; bytes=$length; total=$fileLength")
             val status = if (partial) "206 Partial Content" else "200 OK"
             val headers = buildString {
                 append("HTTP/1.1 $status\r\n")
@@ -142,6 +150,7 @@ class LocalMediaHttpServer(
                     remaining -= count
                 }
                 output.flush()
+                CastDiagnostics.info("HTTP_REQUEST: completed single transfer; requestedBytes=$length; remainingBytes=$remaining")
             }
         }
     }
