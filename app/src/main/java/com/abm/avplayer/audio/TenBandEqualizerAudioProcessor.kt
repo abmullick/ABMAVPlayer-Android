@@ -257,7 +257,6 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
     override fun onFlush() {
         states.forEach { channelStates -> channelStates.forEach { it.clear() } }
         compressorEnvelope.fill(0.0)
-        compressorEnvelope.fill(0.0)
     }
 
     override fun onReset() {
