@@ -1,7 +1,5 @@
 package com.abm.avplayer
 
-import android.content.Context
-import android.media.audiofx.Equalizer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,13 +26,11 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +40,7 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
+import com.abm.avplayer.audio.TenBandEqSettings
 
 @Composable
 fun AdvancedPlaybackMenu(
@@ -215,121 +211,121 @@ private fun TrackDialog(
     )
 }
 
-@OptIn(UnstableApi::class)
 @Composable
 private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val audioSessionId = player.audioSessionId.takeIf { it > 0 }
-        ?: context.getSharedPreferences("abm_playback", Context.MODE_PRIVATE)
-            .getInt("audio_session_id", C.AUDIO_SESSION_ID_UNSET)
-    val equalizer = remember(audioSessionId) {
-        if (audioSessionId > 0) runCatching { Equalizer(0, audioSessionId) }.getOrNull()
-        else null
-    }
-    var levels by remember(audioSessionId) {
-        mutableStateOf(
-            equalizer?.let { effect ->
-                List(effect.numberOfBands.toInt()) { index ->
-                    effect.getBandLevel(index.toShort()).toFloat() / 100f
-                }
-            } ?: emptyList()
-        )
-    }
-    val range = equalizer?.bandLevelRange
-    val minDb = (range?.getOrNull(0)?.toInt() ?: -1500) / 100f
-    val maxDb = (range?.getOrNull(1)?.toInt() ?: 1500) / 100f
-    var effectUnavailable by remember(audioSessionId) { mutableStateOf(equalizer == null) }
-    var presetsOpen by remember(audioSessionId) { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var enabled by remember { mutableStateOf(TenBandEqSettings.enabled) }
+    var levels by remember { mutableStateOf(TenBandEqSettings.gains().toList()) }
+    var presetsOpen by remember { mutableStateOf(false) }
+    val presets = listOf("Flat", "Bass Boost", "Treble Boost", "Rock", "Classical", "Jazz", "Vocal")
 
-    DisposableEffect(equalizer) {
-        onDispose { runCatching { equalizer?.release() } }
+    fun applyGains(values: List<Float>) {
+        levels = values
+        TenBandEqSettings.setGains(values.toFloatArray())
+        TenBandEqSettings.save(context)
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Audio equalizer", color = Color.White) },
+        title = {
+            Column {
+                Text("10-band equalizer", color = Color.White)
+                Text("App-owned DSP · PCM audio", color = Muted, fontSize = 11.sp)
+            }
+        },
         text = {
-            if (equalizer == null || levels.isEmpty()) {
-                Text(
-                    "The device did not expose an audio equalizer for this playback session. Try again after starting an audio track.",
-                    color = Muted
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(
-                        "Device-supported ${levels.size}-band equalizer",
-                        color = Muted,
-                        fontSize = 11.sp
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Presets", color = Cyan, fontSize = 11.sp)
-                        Spacer(Modifier.weight(1f))
-                        Box {
-                            TextButton(onClick = { presetsOpen = true }) {
-                                Text("Choose preset", color = Cyan)
-                            }
-                            DropdownMenu(
-                                expanded = presetsOpen,
-                                onDismissRequest = { presetsOpen = false }
-                            ) {
-                                (0 until equalizer.numberOfPresets.toInt()).forEach { preset ->
-                                    DropdownMenuItem(
-                                        text = { Text(equalizer.getPresetName(preset.toShort()).toString()) },
-                                        onClick = {
-                                            runCatching {
-                                                equalizer.usePreset(preset.toShort())
-                                                levels = List(equalizer.numberOfBands.toInt()) { i ->
-                                                    equalizer.getBandLevel(i.toShort()).toFloat() / 100f
-                                                }
-                                            }
-                                            presetsOpen = false
-                                        }
-                                    )
-                                }
-                            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Equalizer", color = Color.White, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = enabled,
+                        onCheckedChange = {
+                            enabled = it
+                            TenBandEqSettings.setEnabled(it)
+                            TenBandEqSettings.save(context)
                         }
-                        TextButton(onClick = {
-                            runCatching {
-                                equalizer.usePreset(0)
-                                levels = List(equalizer.numberOfBands.toInt()) { i ->
-                                    equalizer.getBandLevel(i.toShort()).toFloat() / 100f
-                                }
-                            }
-                        }) { Text("Reset", color = Cyan) }
-                    }
-                    HorizontalDivider(color = Raised)
-                    LazyColumn {
-                        items(levels.size) { index ->
-                            val centerHz = equalizer.getCenterFreq(index.toShort()) / 1000
-                            val frequency = if (centerHz >= 1000) "${centerHz / 1000}k" else "${centerHz}"
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(frequency, color = Color.White, fontSize = 11.sp)
-                                    Spacer(Modifier.weight(1f))
-                                    Text("%+.1f dB".format(levels[index]), color = Cyan, fontSize = 11.sp)
-                                }
-                                Slider(
-                                    value = levels[index].coerceIn(minDb, maxDb),
-                                    onValueChange = { value ->
-                                        val updated = levels.toMutableList()
-                                        updated[index] = value
-                                        levels = updated
-                                        runCatching {
-                                            equalizer.setBandLevel(index.toShort(), (value * 100).toInt().toShort())
-                                        }.onFailure { effectUnavailable = true }
-                                    },
-                                    valueRange = minDb..maxDb
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        TextButton(onClick = { presetsOpen = true }) {
+                            Text("Presets ▾", color = Cyan)
+                        }
+                        DropdownMenu(
+                            expanded = presetsOpen,
+                            onDismissRequest = { presetsOpen = false }
+                        ) {
+                            presets.forEach { preset ->
+                                DropdownMenuItem(
+                                    text = { Text(preset) },
+                                    onClick = {
+                                        applyGains(TenBandEqSettings.applyPreset(preset).toList())
+                                        enabled = true
+                                        TenBandEqSettings.setEnabled(true)
+                                        TenBandEqSettings.save(context)
+                                        presetsOpen = false
+                                    }
                                 )
                             }
                         }
                     }
-                    if (effectUnavailable) {
-                        Text("The device audio effect is unavailable or was disabled by the system.", color = Muted, fontSize = 10.sp)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = {
+                        applyGains(List(TenBandEqSettings.BAND_COUNT) { 0f })
+                    }) { Text("Reset flat", color = Cyan) }
+                }
+                HorizontalDivider(color = Raised)
+                LazyColumn(
+                    modifier = Modifier.height(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(TenBandEqSettings.BAND_COUNT) { index ->
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    TenBandEqSettings.frequenciesHz[index].let {
+                                        if (it >= 1000) "${it / 1000} kHz" else "${it} Hz"
+                                    },
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "%+.1f dB".format(levels[index]),
+                                    color = Cyan,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Slider(
+                                value = levels[index],
+                                onValueChange = { value ->
+                                    val updated = levels.toMutableList()
+                                    updated[index] = value
+                                    applyGains(updated)
+                                },
+                                valueRange = -12f..12f,
+                                enabled = enabled,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Cyan,
+                                    activeTrackColor = Cyan,
+                                    inactiveTrackColor = Raised,
+                                    disabledThumbColor = Muted,
+                                    disabledActiveTrackColor = Muted
+                                )
+                            )
+                        }
                     }
                 }
+                Text(
+                    "The equalizer processes decoded PCM audio. Encoded passthrough is not altered.",
+                    color = Muted,
+                    fontSize = 10.sp
+                )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = Cyan) } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done", color = Cyan) }
+        },
         containerColor = Panel
     )
 }
