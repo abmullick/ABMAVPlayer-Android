@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; the Streaming Centre and M3U import/export are not yet included. Google Cast now supports multi-item library and playlist queue transfer with remote previous/next; device and format validation remain. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation, media library, advanced playback and initial Google Cast queue support are implemented. The first Android Streaming Centre milestone now provides a dedicated WebView, six official provider launch cards, browser navigation, persistent WebView cookies, fullscreen and direct-URL Cast handoff. Windows receiver-discovery parity (DLNA/UPnP and DIAL), YouTube DIAL app launch and broader provider/device validation remain in progress. Google Cast now supports multi-item library and playlist queue transfer with remote previous/next; device and format validation remain. Initial ReplayGain support is implemented for supported embedded tags; broader format coverage and device validation remain. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
