@@ -101,7 +101,7 @@ class StreamingCentreActivity : ComponentActivity() {
             var discoveryBusy by remember { mutableStateOf(false) }
             var activeReceiver by remember { mutableStateOf<StreamingReceiver?>(null) }
             var receiverPlaybackState by remember { mutableStateOf("Connecting…") }
-            var receiverConnectionState by remember { mutableStateOf("Connected") }
+            var receiverConnectionState by remember { mutableStateOf("Connecting…") }
             var receiverReconnectBusy by remember { mutableStateOf(false) }
             var lastReconnectAttemptMs by remember { mutableStateOf(0L) }
             var receiverPosition by remember { mutableStateOf("00:00:00") }
@@ -334,7 +334,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (receiver.supportsDlna) {
-                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("-30s", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("-30s", color = Cyan) }
                                     if (receiverPlaybackState.equals("PLAYING", true)) {
                                         TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("Pause", color = Cyan) }
                                     } else {
@@ -354,7 +354,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 receiverControlBusy = false
                                             }
                                         }
-                                    }, enabled = !receiverControlBusy && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
                                     TextButton(onClick = {
                                         receiverControlBusy = true
                                         scope.launch {
@@ -365,7 +365,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                             }.onFailure { castMessage = "Stop failed: " + (it.message ?: "receiver error") }
                                             receiverControlBusy = false
                                         }
-                                    }, enabled = !receiverControlBusy) { Text("Stop YouTube", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Stop YouTube", color = Cyan) }
                                 }
                             }
                             if (receiver.supportsDial && !receiver.supportsDlna) {
