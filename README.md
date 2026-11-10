@@ -40,9 +40,12 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 ## Current implementation
 
 - Native Compose application shell and ABM visual identity.
-- Local audio/video file selection through Android's document picker.
-- Media3 playback, seek, play/pause and player surface.
-- Initial project structure and feature-parity roadmap.
+- Local audio/video import through Android's Storage Access Framework with persisted URI access.
+- Room-backed media library and playlists.
+- Media3 playback controlled through a MediaSessionService, with a persistent playback notification/session.
+- Queue playback, previous/next, seek, shuffle and repeat modes.
+- Playback history timestamps and media removal.
+- Compose library screen with Media and Playlists views.
 
 ## Planned milestones
 
