@@ -64,7 +64,7 @@ The player uses Google's Default Media Receiver and the Android Cast route picke
 - Tap the Cast icon in the player header (also available in fullscreen) and choose a receiver.
 - Select an imported library item to send it to the connected receiver.
 - Use the player controls for remote play/pause and seeking. The local player is paused while remote playback is active.
-- Imported SAF files are served from the phone through a temporary, tokenized HTTP endpoint with byte-range support. The endpoint is closed when the Cast session ends or the activity is destroyed.
+- Imported SAF files are served from the phone through a temporary, tokenized HTTP endpoint with byte-range support. The endpoints are owned by a dedicated media-playback foreground service rather than the Activity, so they remain available when the app is backgrounded or the player screen is destroyed. A persistent Cast notification is shown, and short CPU/Wi-Fi locks keep the phone reachable during receiver playback. The service releases its servers and locks when the Cast session ends.
 - Selecting a library item transfers the Cast-compatible library queue and starts at the selected item. Playing a saved playlist transfers that playlist in its saved order.
 - Remote previous/next navigation is supported through the receiver queue. Queue shuffle and repeat controls are synchronised with the Cast receiver; shuffle reorders upcoming items while keeping the current item in place, and repeat supports off/all/one. Remote WebVTT subtitle on/off is supported for the currently selected queue item when an external WebVTT sidecar is attached before casting. The phone serves the subtitle over the same temporary LAN endpoint with CORS support. The Default Media Receiver does not support sender-controlled audio-track switching; Google documents that this requires a Custom Receiver. Embedded subtitles, SRT/SSA/ASS sidecars, and per-item subtitle mapping across the full queue are not yet supported.
 - Google's Default Media Receiver supports a narrower set of containers/codecs than the Windows player. MP4/WebM and common audio formats are the intended starting point; MKV and unknown containers are rejected. Codec support inside a supported container still depends on the receiver.
@@ -78,7 +78,7 @@ Avoid guest Wi-Fi or access-point isolation: the receiver must be able to reach 
 3. **Playback tools:** initial advanced controls implemented; Additional ReplayGain container/tag coverage, subtitle timing/offset controls and DSP/device performance testing remain.
 4. **Casting (initial sender integration):** Google Cast discovery, device picker, session lifecycle, remote play/pause/seek and LAN streaming for imported files. Queue shuffle/repeat synchronisation, richer remote controls, reconnect recovery tests and broad codec/device validation remain.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
-6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, Cast lifecycle/format tests, signed release and in-app updates.
+6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, Cast lifecycle/format tests (including OEM battery-management behaviour), signed release and in-app updates.
 
 ## Documentation
 
