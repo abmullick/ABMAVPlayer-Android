@@ -6,7 +6,7 @@
 
 The native Android companion to [ABM AV Player for Windows](https://github.com/abmullick/ABMAVPlayer). The goal is a consistent ABM product identity and feature set, implemented with Android-native playback, storage, background services and casting.
 
-> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; casting, the Streaming Centre, M3U import/export and ReplayGain/compressor processing are not yet included. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> The Android foundation, media-library milestone and initial advanced playback tools are implemented. Windows feature parity remains an active roadmap; casting, the Streaming Centre, M3U import/export and ReplayGain metadata normalisation are not yet included. See [FEATURE_PARITY.md](docs/FEATURE_PARITY.md) and [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Product direction
 
@@ -50,13 +50,15 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - Embedded audio/subtitle track selection and subtitle-off control.
 - External SRT, WebVTT and SSA/ASS subtitle attachment.
 - Immersive fullscreen video layout.
-- App-owned ten-band peaking-EQ DSP integrated into Media3's decoded PCM pipeline, with persistent gains and Flat, Bass Boost, Treble Boost, Rock, Classical, Jazz and Vocal presets.
+- App-owned ten-band peaking-EQ DSP in Media3's decoded PCM pipeline, with persistent gains and seven presets.
+- Output preamp control and automatic headroom compensation against the highest positive EQ band.
+- Configurable peak-detection dynamic-range compressor with threshold, ratio, attack/release timing and make-up gain; settings persist between sessions.
 
 ## Planned milestones
 
 1. **Foundation:** app shell, local playback, lifecycle handling and visual identity.
 2. **Library (in progress):** broader device media indexing, artwork, M3U import/export and persistent queue restoration. Current release supports SAF-imported files, Room library records, basic playlists, playback history and Media3 shuffle/repeat.
-3. **Playback tools:** initial advanced controls implemented; ReplayGain/compressor processing, subtitle timing/offset controls and DSP/device performance testing remain.
+3. **Playback tools:** initial advanced controls implemented; ReplayGain tag parsing and loudness normalisation, subtitle timing/offset controls and DSP/device performance testing remain.
 4. **Casting:** Google Cast discovery, device picker, remote playback state and recovery.
 5. **Streaming Centre:** isolated WebView, provider launch cards, browser controls and supported native Cast handoff.
 6. **Hardening:** background playback, notification/lock-screen controls, Android Auto consideration, accessibility, tests, signed release and in-app updates.
