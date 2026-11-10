@@ -22,6 +22,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -138,6 +144,19 @@ class StreamingCentreActivity : ComponentActivity() {
             var castRemotePosition by remember { mutableLongStateOf(0L) }
             var castRemoteDuration by remember { mutableLongStateOf(0L) }
             val scope = rememberCoroutineScope()
+            val hasSelectedReceiver = receivers.any { it.id == selectedReceiverId }
+            val findTvPulse = rememberInfiniteTransition(label = "find-tv-selected-pulse")
+            val findTvPulseProgress by findTvPulse.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "find-tv-pulse-progress"
+            )
+            val findTvPulseTint = Color(0xFFFF3030).copy(alpha = 0.72f + 0.28f * findTvPulseProgress)
+            val findTvPulseBackground = Color(0xFFFF3030).copy(alpha = 0.08f + 0.17f * findTvPulseProgress)
 
             fun controlGoogleCast(action: String, targetPositionMs: Long? = null) {
                 val remote = runCatching {
@@ -567,8 +586,19 @@ class StreamingCentreActivity : ComponentActivity() {
                             },
                             modifier = Modifier.size(42.dp)
                         )
-                        IconButton(onClick = { receiverPanel = true; refreshReceivers() }) {
-                            Icon(Icons.Default.Cast, contentDescription = "Find TVs", tint = Cyan)
+                        IconButton(
+                            onClick = { receiverPanel = true; refreshReceivers() },
+                            modifier = Modifier
+                                .background(
+                                    color = if (hasSelectedReceiver) findTvPulseBackground else Color.Transparent,
+                                    shape = RoundedCornerShape(50)
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.Cast,
+                                contentDescription = if (hasSelectedReceiver) "Find TVs — TV selected" else "Find TVs",
+                                tint = if (hasSelectedReceiver) findTvPulseTint else Cyan
+                            )
                         }
                         IconButton(onClick = { openInBrowser() }, enabled = !homeMode && currentUrl.startsWith("https://")) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser", tint = Color.White)
