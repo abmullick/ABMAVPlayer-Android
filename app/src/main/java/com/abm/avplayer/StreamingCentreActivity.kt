@@ -285,8 +285,15 @@ class StreamingCentreActivity : ComponentActivity() {
                             youtubeRemotePosition = it.currentTimeSeconds
                             youtubeRemoteDuration = it.durationSeconds
                             youtubeRemoteVideoId = it.videoId
+                            if (it.state == "DISCONNECTED") {
+                                StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
+                                youtubeRemoteReady = false
+                            }
                         }.onFailure {
-                            if (it.message?.contains("not paired", true) == true) {
+                            if (it.message?.contains("not paired", true) == true ||
+                                it.message?.contains("HTTP 401", true) == true ||
+                                it.message?.contains("HTTP 410", true) == true) {
+                                StreamingReceiverDiscovery.clearYoutubeRemoteSession(receiver)
                                 youtubeRemoteReady = false
                                 youtubeRemotePlaybackState = "Not paired"
                             }
