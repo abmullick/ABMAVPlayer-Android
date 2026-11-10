@@ -220,10 +220,9 @@ object StreamingReceiverDiscovery {
                 val bindPath = "/api/lounge/bc/bind?CVER=1&RID=1&VER=8&app=youtube-desktop&device=REMOTE_CONTROL&id=remote&loungeIdToken=" +
                     formEncode(token) + "&name=ABM%20AV%20Player"
                 val bindResponse = youtubeLoungePost(bindPath, "")
-                val connectionFrame = Regex("\\[\\\"c\\\",\\\"([^\\\"]+)\\\",\\\"([^\\\"]+)").find(bindResponse)
+                val sid = Regex("""\["c","([^"]+)""").find(bindResponse)?.groupValues?.getOrNull(1)
                     ?: error("YouTube did not return a valid remote-control session.")
-                val sid = connectionFrame.groupValues[1]
-                val aid = connectionFrame.groupValues[2]
+                val aid = Regex("""\["c","[^"]+","([^"]+)""").find(bindResponse)?.groupValues?.getOrNull(1)
                 val gsession = Regex("\\[\\\"S\\\",\\\"([^\\\"]+)").find(bindResponse)?.groupValues?.getOrNull(1)
                     ?: error("YouTube did not return a valid remote-control session.")
 
