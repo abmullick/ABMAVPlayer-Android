@@ -455,7 +455,7 @@ class MainActivity : ComponentActivity() {
             CastDiagnostics.warn("SERVICE_BIND: failed to start or bind CastStreamService", error)
             pendingCastStreamCallbacks.clear()
             runCatching { stopService(intent) }
-            castMessageState.value = "Could not start background Cast streaming: ${it.message}"
+            castMessageState.value = "Could not start background Cast streaming: ${error.message}"
         }
     }
 
