@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class LocalMediaHttpServer(
     private val resolver: ContentResolver,
-    private val uri: Uri
+    private val uri: Uri,
+    private val contentType: String
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val clients = Executors.newCachedThreadPool()
