@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
     private val castRepeatModeState = mutableIntStateOf(Player.REPEAT_MODE_OFF)
     private val castSubtitleAvailableState = mutableStateOf(false)
     private val castSubtitleEnabledState = mutableStateOf(false)
+    private val castQueueSummaryState = mutableStateOf("")
     private var castOriginalFutureOrder: List<Int>? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
@@ -145,6 +146,7 @@ class MainActivity : ComponentActivity() {
             val castRepeatMode by castRepeatModeState
             val castSubtitleAvailable by castSubtitleAvailableState
             val castSubtitleEnabled by castSubtitleEnabledState
+            val castQueueSummary by castQueueSummaryState
 
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenMultipleDocuments()
@@ -223,7 +225,17 @@ class MainActivity : ComponentActivity() {
                         val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
                         if (remote != null) {
                             val status = remote.mediaStatus
-                            remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE)?.let { title = it }
+                            val queueItems = status?.queueItems.orEmpty()
+                            val currentQueueIndex = queueItems.indexOfFirst { it.itemId == status?.currentItemId }
+                            val currentQueueItem = queueItems.getOrNull(currentQueueIndex)
+                            val queueTitle = currentQueueItem?.media?.metadata
+                                ?.getString(CastMediaMetadata.KEY_TITLE)
+                            val liveTitle = queueTitle
+                                ?: remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE)
+                            if (!liveTitle.isNullOrBlank()) title = liveTitle
+                            castQueueSummaryState.value = if (queueItems.size > 1 && currentQueueIndex >= 0) {
+                                "QUEUE  ·  ${currentQueueIndex + 1} / ${queueItems.size}"
+                            } else ""
                             playing = status?.playerState == MediaStatus.PLAYER_STATE_PLAYING
                             castRepeatModeState.intValue = when (status?.queueRepeatMode) {
                                 MediaStatus.REPEAT_MODE_REPEAT_ALL -> Player.REPEAT_MODE_ALL
@@ -237,8 +249,6 @@ class MainActivity : ComponentActivity() {
                             duration = remote.streamDuration.coerceAtLeast(0L)
                             val now = System.currentTimeMillis()
                             if (now - lastCastRecoveryCheckpointAt >= 2_000L) {
-                                val queueItems = status?.queueItems.orEmpty()
-                                val currentQueueIndex = queueItems.indexOfFirst { it.itemId == status?.currentItemId }
                                 updateCastRecoveryProgress(
                                     position,
                                     if (!castShuffleState.value && currentQueueIndex >= 0) currentQueueIndex else null
@@ -309,6 +319,7 @@ class MainActivity : ComponentActivity() {
                         PlayerScreen(
                             title = title, player = controller,
                             castConnected = castConnected, castDeviceName = castDeviceName, castMessage = castMessage,
+                            castQueueSummary = castQueueSummary,
                             hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
                             castShuffleEnabled = castShuffleEnabled, castRepeatMode = castRepeatMode,
@@ -534,6 +545,7 @@ class MainActivity : ComponentActivity() {
                     castRepeatModeState.intValue = Player.REPEAT_MODE_OFF
                     castSubtitleAvailableState.value = false
                     castSubtitleEnabledState.value = false
+                    castQueueSummaryState.value = ""
                     castOriginalFutureOrder = null
                     clearCastRecoverySnapshot()
                     stopCastStreamService()
@@ -952,6 +964,7 @@ private fun PlayerScreen(
     castConnected: Boolean,
     castDeviceName: String,
     castMessage: String,
+    castQueueSummary: String,
     player: Player?,
     hasVideo: Boolean,
     playing: Boolean,
@@ -1102,6 +1115,11 @@ private fun PlayerScreen(
                 Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (castConnected && castQueueSummary.isNotBlank()) {
+                    Text(castQueueSummary, color = Violet, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
+                }
                 if (castConnected || (castMessage.isNotBlank() && castMessage != "Disconnected")) {
                     Text(if (castConnected) "CASTING  ·  $castDeviceName  ·  $castMessage" else castMessage,
                         color = if (castConnected) Cyan else Muted, fontSize = 10.sp,
