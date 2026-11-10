@@ -125,6 +125,7 @@ class StreamingCentreActivity : ComponentActivity() {
             fun reconnectActiveReceiver() {
                 val previous = activeReceiver ?: return
                 receiverReconnectBusy = true
+                lastReconnectAttemptMs = System.currentTimeMillis()
                 receiverConnectionState = "Reconnecting…" 
                 scope.launch {
                     try {
@@ -210,7 +211,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         receiverConnectionState = "Connection lost · retrying"
                         receiverPlaybackState = "Status unavailable"
                         val now = System.currentTimeMillis()
-                        if (now - lastReconnectAttemptMs >= 15_000L) {
+                        if (!receiverReconnectBusy && now - lastReconnectAttemptMs >= 15_000L) {
                             lastReconnectAttemptMs = now
                             val found = runCatching { StreamingReceiverDiscovery.discover(this@StreamingCentreActivity) }.getOrNull().orEmpty()
                             val refreshed = found.firstOrNull { it.address.equals(receiver.address, true) && it.name.equals(receiver.name, true) }
@@ -333,7 +334,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (receiver.supportsDlna) {
-                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("-30s", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy && !receiverConnectionState.startsWith("Offline")) { Text("-30s", color = Cyan) }
                                     if (receiverPlaybackState.equals("PLAYING", true)) {
                                         TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy && receiverConnectionState != "Offline") { Text("Pause", color = Cyan) }
                                     } else {
@@ -353,7 +354,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 receiverControlBusy = false
                                             }
                                         }
-                                    }, enabled = !receiverControlBusy && currentYoutubeVideoId() != null) { Text("Launch / Resume", color = Cyan) }
+                                    }, enabled = !receiverControlBusy && currentYoutubeVideoId() != null) { Text("Launch YouTube", color = Cyan) }
                                     TextButton(onClick = {
                                         receiverControlBusy = true
                                         scope.launch {
