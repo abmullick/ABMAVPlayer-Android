@@ -106,7 +106,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 scope.launch {
                     try {
                         receivers = StreamingReceiverDiscovery.discover(this@StreamingCentreActivity)
-                        if (selectedReceiverId !in receivers.map { it.id }) selectedReceiverId = receivers.firstOrNull()?.id
+                        if (receivers.none { it.id == selectedReceiverId }) selectedReceiverId = receivers.firstOrNull()?.id
                         castMessage = if (receivers.isEmpty()) "No DLNA or YouTube DIAL devices found. Check the same Wi-Fi." else "Found " + receivers.size + " network receiver(s)."
                     } catch (error: Exception) {
                         castMessage = "Device discovery failed: " + (error.message ?: "network error")
