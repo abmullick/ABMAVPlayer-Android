@@ -23,9 +23,10 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 | Animated audio visualizer | Audio-session/PCM analysis where legally and technically supported | Planned |
 | Google Cast | Google Cast SDK, Default Media Receiver, native route picker and remote media client | Implemented initial multi-item queue transfer from the imported library or a saved playlist, preserving the selected start item; temporary SAF LAN streaming with byte ranges; direct HTTP(S) URLs; remote play/pause/seek/previous/next. Sender title and one-based queue position are synchronised from the receiver's live `MediaStatus`/`currentItemId`, including track changes initiated on the TV. Shuffle/repeat controls now use Cast queue reorder and repeat-mode APIs; Cast subtitle on/off is implemented for a pre-attached WebVTT sidecar on the selected item; audio-track switching requires a Custom Receiver and is not supported by Google's Default Media Receiver; broad codec guarantee and physical-device validation remain |
 | Windows network receiver discovery | Android Cast discovery; do not promise arbitrary DLNA/Miracast parity | Platform-specific |
-| Streaming Centre provider cards | Android WebView and provider official apps/sites | Planned |
-| Streaming Centre browser controls | Android WebView navigation, reload, fullscreen and open externally | Planned |
-| YouTube/provider TV handoff | Official Cast SDK/provider-supported routes | Planned |
+| Streaming Centre provider cards | Dedicated Android WebView with official provider launch cards | Initial implementation: YouTube, Netflix, Prime Video, JioHotstar, Sony LIV and ZEE5 |
+| Streaming Centre browser controls | WebView history, reload, home, HTML5 fullscreen and external browser | Initial implementation; persistent WebView cookie sessions and HTTPS-only navigation |
+| Streaming Centre TV discovery | Android Cast route picker; native SSDP/DIAL discovery to follow | Partial: Google Cast route selection only; DLNA/UPnP and DIAL not yet implemented |
+| Streaming Centre video handoff | Direct HTTPS HTML5 video URL through Cast SDK; provider-native handoff where available | Partial: direct URL handoff only; no tab mirroring, YouTube DIAL launch or protected/segmented stream extraction |
 | In-app update checker | GitHub Releases API + SHA-256 verification + Android package installer flow | Planned |
 
 ## Important parity notes
