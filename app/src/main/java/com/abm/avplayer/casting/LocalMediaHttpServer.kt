@@ -36,6 +36,7 @@ class LocalMediaHttpServer(
             ?: error("Cannot open the selected media document")
         startOffset = afd.startOffset
         fileLength = afd.length
+        afd.close()
         if (fileLength < 0L) {
             afd.close()
             error("This media provider does not expose a seekable file length")
