@@ -85,6 +85,8 @@ private val streamingProviders = listOf(
     StreamingProvider("ZEE5", "TV shows, movies and originals", "https://www.zee5.com/", Color(0xFFB78CFF), listOf("com.graymatrix.did"))
 )
 
+private val allowedProviderAppPackages = streamingProviders.flatMap { it.appPackages }.toSet()
+
 class StreamingCentreActivity : ComponentActivity() {
     private var browser: WebView? = null
     private var customView: View? = null
@@ -617,7 +619,34 @@ class StreamingCentreActivity : ComponentActivity() {
                         // Never silently downgrade a provider session to clear-text HTTP.
                         return true
                     }
-                    if (uri.scheme == "intent") return true
+                    if (uri.scheme.equals("intent", true)) {
+                        val parsedIntent = runCatching {
+                            Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
+                        }.getOrNull() ?: return true
+                        val providerPackage = parsedIntent.getPackage()
+                        if (providerPackage !in allowedProviderAppPackages) return true
+                        val targetUri = parsedIntent.data ?: return true
+                        val safeIntent = Intent(Intent.ACTION_VIEW, targetUri).apply {
+                            setPackage(providerPackage)
+                            addCategory(Intent.CATEGORY_BROWSABLE)
+                        }
+                        val launched = runCatching { startActivity(safeIntent) }.isSuccess
+                        if (!launched) {
+                            val fallback = parsedIntent.getStringExtra("browser_fallback_url")
+                            val fallbackUri = fallback?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                            if (fallbackUri != null && fallbackUri.scheme.equals("https", true) && isAllowedWebDestination(fallbackUri)) {
+                                view.loadUrl(fallbackUri.toString())
+                            }
+                        }
+                        return true
+                    }
+                    if (uri.scheme.equals("market", true)) {
+                        val providerPackage = uri.getQueryParameter("id")
+                        if (providerPackage in allowedProviderAppPackages) {
+                            runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                        }
+                        return true
+                    }
                     return true
                 }
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
