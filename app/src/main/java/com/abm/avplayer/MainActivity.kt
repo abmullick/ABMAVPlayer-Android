@@ -191,6 +191,7 @@ class MainActivity : ComponentActivity() {
                         val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
                         if (remote != null) {
                             val status = remote.mediaStatus
+                            remote.mediaInfo?.metadata?.getString(CastMediaMetadata.KEY_TITLE)?.let { title = it }
                             playing = status?.playerState == MediaStatus.PLAYER_STATE_PLAYING
                             position = remote.approximateStreamPosition.coerceAtLeast(0L)
                             duration = remote.streamDuration.coerceAtLeast(0L)
@@ -234,7 +235,7 @@ class MainActivity : ComponentActivity() {
                             onPlayPlaylist = { playlist ->
                                 scope.launch {
                                     val uris = repository.playlistUris(playlist.id).toSet()
-                                    val tracks = library.filter { it.uri in uris }
+                                    val tracks = uris.mapNotNull { uri -> library.firstOrNull { it.uri == uri } }
                                     if (tracks.isNotEmpty()) {
                                         if (castContext?.sessionManager?.currentCastSession != null) {
                                             castLibraryQueue(tracks, tracks.first())
