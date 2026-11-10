@@ -68,15 +68,21 @@ import com.abm.avplayer.streaming.StreamingReceiverDiscovery
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
-private data class StreamingProvider(val name: String, val subtitle: String, val url: String, val accent: Color)
+private data class StreamingProvider(
+    val name: String,
+    val subtitle: String,
+    val url: String,
+    val accent: Color,
+    val appPackages: List<String>
+)
 
 private val streamingProviders = listOf(
-    StreamingProvider("YouTube", "Videos, channels and playlists", "https://www.youtube.com/", Color(0xFFFF5555)),
-    StreamingProvider("Netflix", "Films and series", "https://www.netflix.com/", Color(0xFFE50914)),
-    StreamingProvider("Prime Video", "Movies, series and live sport", "https://www.primevideo.com/", Color(0xFF38BDF8)),
-    StreamingProvider("JioHotstar", "Entertainment and sport", "https://www.hotstar.com/in", Color(0xFF8B7CFF)),
-    StreamingProvider("Sony LIV", "Shows, films and sport", "https://www.sonyliv.com/", Color(0xFF8C7BFF)),
-    StreamingProvider("ZEE5", "TV shows, movies and originals", "https://www.zee5.com/", Color(0xFFB78CFF))
+    StreamingProvider("YouTube", "Videos, channels and playlists", "https://www.youtube.com/", Color(0xFFFF5555), listOf("com.google.android.youtube", "com.google.android.youtube.tv")),
+    StreamingProvider("Netflix", "Films and series", "https://www.netflix.com/", Color(0xFFE50914), listOf("com.netflix.mediaclient", "com.netflix.ninja")),
+    StreamingProvider("Prime Video", "Movies, series and live sport", "https://www.primevideo.com/", Color(0xFF38BDF8), listOf("com.amazon.avod.thirdpartyclient", "com.amazon.amazonvideo.livingroom")),
+    StreamingProvider("JioHotstar", "Entertainment and sport", "https://www.hotstar.com/in", Color(0xFF8B7CFF), listOf("in.startv.hotstar")),
+    StreamingProvider("Sony LIV", "Shows, films and sport", "https://www.sonyliv.com/", Color(0xFF8C7BFF), listOf("com.sonyliv")),
+    StreamingProvider("ZEE5", "TV shows, movies and originals", "https://www.zee5.com/", Color(0xFFB78CFF), listOf("com.graymatrix.did"))
 )
 
 class StreamingCentreActivity : ComponentActivity() {
@@ -277,6 +283,24 @@ class StreamingCentreActivity : ComponentActivity() {
                 browser?.loadUrl(provider.url)
             }
 
+            fun openProviderApp(provider: StreamingProvider) {
+                val launchedPackage = provider.appPackages.firstNotNullOfOrNull { packageName ->
+                    runCatching {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.url)).apply {
+                            setPackage(packageName)
+                            addCategory(Intent.CATEGORY_BROWSABLE)
+                        })
+                        packageName
+                    }.getOrNull()
+                }
+                if (launchedPackage == null) {
+                    castMessage = provider.name + " app was not found. Opening the official web service instead."
+                    openProvider(provider)
+                } else {
+                    castMessage = "Opened " + provider.name + ". Use its official Cast button to send protected playback to your TV."
+                }
+            }
+
             BackHandler(enabled = customView != null || !homeMode) {
                 if (customView != null) hideCustomView()
                 else if (canGoBack) browser?.goBack()
@@ -467,8 +491,14 @@ class StreamingCentreActivity : ComponentActivity() {
                                             Text(provider.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                                             Text(provider.subtitle, color = Muted, fontSize = 10.sp,
                                                 minLines = 2)
-                                            Text("OPEN SERVICE  →", color = Cyan, fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                TextButton(onClick = { openProvider(provider) }, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 2.dp)) {
+                                                    Text("WEB", color = Cyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                                TextButton(onClick = { openProviderApp(provider) }, contentPadding = PaddingValues(horizontal = 5.dp, vertical = 2.dp)) {
+                                                    Text("APP ↗", color = provider.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                         }
                                     }
                                 }
