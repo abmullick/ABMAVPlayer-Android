@@ -65,6 +65,11 @@ import com.google.android.gms.cast.MediaStatus
 import org.json.JSONObject
 import com.abm.avplayer.streaming.StreamingReceiver
 import com.abm.avplayer.streaming.DialApplicationInfo
+import com.abm.avplayer.streaming.DialApplicationReceiverControl
+import com.abm.avplayer.streaming.DlnaReceiverControl
+import com.abm.avplayer.streaming.GoogleCastReceiverControl
+import com.abm.avplayer.streaming.ReceiverControlCommand
+import com.abm.avplayer.streaming.YoutubeLoungeReceiverControl
 import com.abm.avplayer.streaming.StreamingReceiverDiscovery
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -141,26 +146,22 @@ class StreamingCentreActivity : ComponentActivity() {
                     castMessage = "No active Google Cast receiver is connected."
                     return
                 }
-                receiverControlBusy = true
-                val pending = runCatching {
-                    when (action) {
-                        "play" -> remote.play()
-                        "pause" -> remote.pause()
-                        "stop" -> remote.stop()
-                        "seek" -> remote.seek(MediaSeekOptions.Builder().setPosition(targetPositionMs ?: 0L).build())
-                        else -> error("Unsupported Google Cast command.")
+                val command = when (action) {
+                    "play" -> ReceiverControlCommand.Play
+                    "pause" -> ReceiverControlCommand.Pause
+                    "stop" -> ReceiverControlCommand.StopPlayback
+                    "seek" -> ReceiverControlCommand.SeekTo((targetPositionMs ?: 0L) / 1000.0)
+                    else -> {
+                        castMessage = "Unsupported Google Cast command."
+                        return
                     }
-                }.getOrElse {
-                    receiverControlBusy = false
-                    castMessage = "Google Cast command failed: ${it.message ?: "receiver error"}"
-                    return
                 }
-                pending.setResultCallback { result ->
-                    castMessage = if (result.status.isSuccess) {
-                        "Google Cast ${action} command sent."
-                    } else {
-                        "Google Cast ${action} failed (status ${result.status.statusCode})."
-                    }
+                receiverControlBusy = true
+                scope.launch {
+                    GoogleCastReceiverControl(remote).execute(command).fold(
+                        { castMessage = "Google Cast ${action} command sent." },
+                        { castMessage = "Google Cast ${action} failed: ${it.message ?: "receiver error"}" }
+                    )
                     receiverControlBusy = false
                 }
             }
@@ -241,11 +242,8 @@ class StreamingCentreActivity : ComponentActivity() {
             fun controlDialApplication(receiver: StreamingReceiver, applicationName: String, launch: Boolean) {
                 receiverControlBusy = true
                 scope.launch {
-                    val result = if (launch) {
-                        StreamingReceiverDiscovery.launchDialApplication(receiver, applicationName)
-                    } else {
-                        StreamingReceiverDiscovery.stopDialApplication(receiver, applicationName)
-                    }
+                    val controller = DialApplicationReceiverControl(receiver, applicationName)
+                    val result = controller.execute(if (launch) ReceiverControlCommand.LaunchApp(applicationName) else ReceiverControlCommand.StopApp(applicationName))
                     result.onSuccess {
                         castMessage = (if (launch) "Launch requested for " else "Stop requested for ") + applicationName + " on " + receiver.name
                     }.onFailure {
@@ -264,15 +262,24 @@ class StreamingCentreActivity : ComponentActivity() {
                 val receiver = activeReceiver ?: return
                 if (!receiver.supportsDlna) return
                 receiverControlBusy = true
+                val command = when (action) {
+                    "Play" -> ReceiverControlCommand.Play
+                    "Pause" -> ReceiverControlCommand.Pause
+                    "Stop" -> ReceiverControlCommand.StopPlayback
+                    else -> return
+                }
                 scope.launch {
-                    val result = StreamingReceiverDiscovery.controlDlna(receiver, action)
-                    castMessage = result.fold({ action + " command sent to " + receiver.name }, { "TV control failed: " + (it.message ?: "receiver error") })
-                    receiverControlBusy = false
-                    StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
-                        receiverPlaybackState = it.state
-                        receiverPosition = it.position
-                        receiverDuration = it.duration
+                    val controller = DlnaReceiverControl(receiver)
+                    controller.execute(command).fold(
+                        { castMessage = action + " command sent to " + receiver.name },
+                        { castMessage = "TV control failed: " + (it.message ?: "receiver error") }
+                    )
+                    controller.getStatus().onSuccess {
+                        receiverPlaybackState = it.playbackState
+                        receiverPosition = it.positionSeconds?.toLong()?.toDlnaTimeLabel() ?: "00:00:00"
+                        receiverDuration = it.durationSeconds?.toLong()?.toDlnaTimeLabel() ?: "00:00:00"
                     }
+                    receiverControlBusy = false
                 }
             }
 
@@ -281,8 +288,19 @@ class StreamingCentreActivity : ComponentActivity() {
                 if (!youtubeRemoteReady) return
                 receiverControlBusy = true
                 scope.launch {
-                    StreamingReceiverDiscovery.controlYoutubeLounge(receiver, action)
-                        .onSuccess {
+                    val command = when (action) {
+                        "play" -> ReceiverControlCommand.Play
+                        "pause" -> ReceiverControlCommand.Pause
+                        "stop" -> ReceiverControlCommand.StopPlayback
+                        "next", "previous" -> null
+                        else -> null
+                    }
+                    val commandResult = if (command != null) {
+                        YoutubeLoungeReceiverControl(receiver).execute(command)
+                    } else {
+                        StreamingReceiverDiscovery.controlYoutubeLounge(receiver, action)
+                    }
+                    commandResult.onSuccess {
                             youtubeRemotePlaybackState = "Updating…"
                             castMessage = "YouTube " + action + " command sent to " + receiver.name
                         }
@@ -309,7 +327,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 val target = (youtubeRemotePosition + deltaSeconds).coerceIn(0.0, maximum)
                 receiverControlBusy = true
                 scope.launch {
-                    StreamingReceiverDiscovery.seekYoutubeLounge(receiver, target)
+                    YoutubeLoungeReceiverControl(receiver).execute(ReceiverControlCommand.SeekTo(target))
                         .onSuccess { youtubeRemotePlaybackState = "Updating…"; castMessage = "YouTube seek sent to " + receiver.name }
                         .onFailure {
                             castMessage = "YouTube seek failed: " + (it.message ?: "receiver error")
@@ -333,7 +351,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 val formatted = "%02d:%02d:%02d".format(target / 3600, (target % 3600) / 60, target % 60)
                 receiverControlBusy = true
                 scope.launch {
-                    val result = StreamingReceiverDiscovery.seekDlna(receiver, formatted)
+                    val result = DlnaReceiverControl(receiver).execute(ReceiverControlCommand.SeekTo(target.toDouble()))
                     castMessage = result.fold({ "Seek sent to " + receiver.name }, { "Seek failed: " + (it.message ?: "receiver error") })
                     receiverControlBusy = false
                 }
