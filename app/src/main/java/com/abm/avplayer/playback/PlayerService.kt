@@ -1,6 +1,8 @@
 package com.abm.avplayer.playback
 
 import android.content.Context
+import androidx.media3.common.Metadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -9,6 +11,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.abm.avplayer.audio.TenBandEqSettings
+import com.abm.avplayer.audio.ReplayGainMetadataParser
 import com.abm.avplayer.audio.TenBandEqualizerAudioProcessor
 
 class PlayerService : MediaSessionService() {
@@ -36,6 +39,15 @@ class PlayerService : MediaSessionService() {
             }
         }
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory).build()
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                TenBandEqSettings.resetReplayGainForTrack()
+            }
+
+            override fun onMetadata(metadata: Metadata) {
+                TenBandEqSettings.updateReplayGain(ReplayGainMetadataParser.parse(metadata))
+            }
+        })
         player = exoPlayer
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
     }
