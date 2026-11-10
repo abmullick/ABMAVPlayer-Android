@@ -614,12 +614,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun castLibraryQueue(library: List<MediaFileEntity>, selected: MediaFileEntity, startPositionMs: Long = 0L) {
-        val session = castContext?.sessionManager?.currentCastSession ?: return
+        val session = castContext?.sessionManager?.currentCastSession
+        if (session == null) {
+            CastDiagnostics.warn("QUEUE: aborted because no active Cast session exists")
+            castMessageState.value = "Select and connect to a TV before casting the queue."
+            return
+        }
+        CastDiagnostics.info("QUEUE: requested; device=${session.castDevice?.friendlyName}; sourceCount=${library.size}; selectedTitle=${selected.title}; startPositionMs=$startPositionMs")
         val needsLanServer = library.any { file ->
             val scheme = Uri.parse(file.uri).scheme
             scheme != "http" && scheme != "https"
         }
         if (needsLanServer && castStreamService == null) {
+            CastDiagnostics.info("QUEUE: local items require CastStreamService; requesting service bind")
             withCastStreamService { castLibraryQueue(library, selected) }
             return
         }
@@ -632,6 +639,7 @@ class MainActivity : ComponentActivity() {
                 if (mime == "application/octet-stream" || mime == "video/x-matroska") null
                 else Triple(file, uri, mime)
             }
+            CastDiagnostics.info("QUEUE: compatibility filter; supported=${supported.size}; skipped=${library.size - supported.size}")
             require(supported.isNotEmpty()) { "No Cast-compatible media found in this library" }
             val selectedIndex = supported.indexOfFirst { it.first.uri == selected.uri }
             require(selectedIndex >= 0) { "The selected item is not supported by the Cast receiver" }
@@ -655,6 +663,7 @@ class MainActivity : ComponentActivity() {
             val queueServer = if (localSources.isNotEmpty()) {
                 castStreamService?.startQueueServer(localSources)
             } else null
+            CastDiagnostics.info("QUEUE: endpoint setup complete; localSources=${localSources.size}; queueServerPresent=${queueServer != null}")
 
             val queueItems = supported.mapIndexed { index, (file, uri, mime) ->
                 val mediaUrl = if (uri.scheme == "http" || uri.scheme == "https") uri.toString()
@@ -691,6 +700,7 @@ class MainActivity : ComponentActivity() {
             controllerState.value?.pause()
             val remote = session.remoteMediaClient
                 ?: error("TV connected, but remote playback is unavailable")
+            CastDiagnostics.info("QUEUE: issuing queueLoad; items=${queueItems.size}; selectedIndex=$selectedIndex; remoteClientPresent=true")
             castMessageState.value = "Sending ${queueItems.size} items to ${session.castDevice?.friendlyName ?: "TV"}…"
             remote.queueLoad(
                 queueItems.toTypedArray(),
@@ -699,6 +709,7 @@ class MainActivity : ComponentActivity() {
                 startPositionMs.coerceAtLeast(0L),
                 null
             ).setResultCallback { result ->
+                CastDiagnostics.info("QUEUE_RESULT: success=${result.status.isSuccess}; statusCode=${result.status.statusCode}; statusMessage=${result.status.statusMessage}; playerState=${remote.mediaStatus?.playerState}; idleReason=${remote.mediaStatus?.idleReason}")
                 castMessageState.value = if (result.status.isSuccess) {
                     "Playing library queue on ${session.castDevice?.friendlyName ?: "TV"}"
                 } else {
@@ -709,9 +720,10 @@ class MainActivity : ComponentActivity() {
             val skipped = library.size - supported.size
             if (skipped > 0) castMessageState.value = "Sending ${supported.size} compatible items; skipped $skipped unsupported file(s)"
             if (selectedSubtitle != null) castMessageState.value = "Cast queue sent with WebVTT subtitles available for the selected item"
-        }.onFailure {
+        }.onFailure { error ->
+            CastDiagnostics.warn("QUEUE: preparation or handoff failed", error)
             castStreamService?.clearServers()
-            castMessageState.value = "Cast queue failed: ${it.message}"
+            castMessageState.value = "Cast queue failed: ${error.message}"
         }
     }
 
