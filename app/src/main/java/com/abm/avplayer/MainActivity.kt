@@ -236,9 +236,13 @@ class MainActivity : ComponentActivity() {
                                     val uris = repository.playlistUris(playlist.id).toSet()
                                     val tracks = library.filter { it.uri in uris }
                                     if (tracks.isNotEmpty()) {
-                                        controller?.setMediaItems(tracks.map(::toMediaItem))
-                                        controller?.prepare()
-                                        controller?.play()
+                                        if (castContext?.sessionManager?.currentCastSession != null) {
+                                            castLibraryQueue(tracks, tracks.first())
+                                        } else {
+                                            controller?.setMediaItems(tracks.map(::toMediaItem))
+                                            controller?.prepare()
+                                            controller?.play()
+                                        }
                                         page = "player"
                                     }
                                 }
@@ -409,10 +413,10 @@ class MainActivity : ComponentActivity() {
             localCastQueueServer?.close()
             localCastQueueServer = null
 
-            val localSources = supported.filter { it.second.scheme != "http" && it.second.scheme != "https" }
-                .mapIndexed { index, item ->
-                    LocalCastMediaSource("item$index", item.second, item.third)
-                }
+            val localSources = supported.mapIndexedNotNull { index, item ->
+                if (item.second.scheme == "http" || item.second.scheme == "https") null
+                else LocalCastMediaSource("item$index", item.second, item.third)
+            }
             val queueServer = if (localSources.isNotEmpty()) {
                 LocalMediaQueueHttpServer(contentResolver, localSources).also { localCastQueueServer = it }
                     .also { it.start() }
