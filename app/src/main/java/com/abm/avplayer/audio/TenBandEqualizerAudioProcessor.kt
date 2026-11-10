@@ -111,7 +111,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
     private var channelCount = 0
     private var coefficients = emptyArray<BiquadCoefficients>()
     private var states = emptyArray<Array<BiquadState>>()
-    private var lastGains = FloatArray(TenBandEqSettings.BAND_COUNT) { Float.NaN }
+    private var lastGains = FloatArray(TenBandEqSettings.BAND_COUNT) { Float.NaN }\n    private var compressorEnvelope = DoubleArray(0)
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if ((inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
@@ -149,7 +149,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
                         for (band in coefficients.indices) {
                             sample = states[band][channel].process(sample, coefficients[band])
                         }
-                        output.putFloat(sample.toFloat().coerceIn(-1f, 1f))
+                        sample = processDynamics(sample, channel, preampLinear, makeupLinear, attack, release, threshold, ratio)\n                        output.putFloat(sample.toFloat().coerceIn(-1f, 1f))
                     }
                 }
             }
@@ -164,7 +164,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
                         for (band in coefficients.indices) {
                             sample = states[band][channel].process(sample, coefficients[band])
                         }
-                        val scaled = (sample * 32768.0).toInt().coerceIn(-32768, 32767)
+                        sample = processDynamics(sample, channel, preampLinear, makeupLinear, attack, release, threshold, ratio)\n                        val scaled = (sample * 32768.0).toInt().coerceIn(-32768, 32767)
                         output.putShort(scaled.toShort())
                     }
                 }
@@ -174,7 +174,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
         output.flip()
     }
 
-    private fun updateCoefficients(gains: FloatArray) {
+    private fun processDynamics(\n        input: Double, channel: Int, preamp: Double, makeup: Double,\n        attack: Double, release: Double, thresholdDb: Double, ratio: Double\n    ): Double {\n        var sample = input * preamp\n        if (TenBandEqSettings.compressorEnabled) {\n            val level = kotlin.math.abs(sample)\n            val coefficient = if (level > compressorEnvelope[channel]) attack else release\n            compressorEnvelope[channel] = coefficient * compressorEnvelope[channel] + (1.0 - coefficient) * level\n            val envelopeDb = 20.0 * kotlin.math.log10(compressorEnvelope[channel].coerceAtLeast(1e-9))\n            val compressedDb = if (envelopeDb > thresholdDb) thresholdDb + (envelopeDb - thresholdDb) / ratio else envelopeDb\n            val gainDb = (compressedDb - envelopeDb).coerceAtMost(0.0)\n            sample *= 10.0.pow(gainDb / 20.0) * makeup\n        }\n        return sample\n    }\n\n    private fun updateCoefficients(gains: FloatArray) {
         coefficients = Array(TenBandEqSettings.BAND_COUNT) { band ->
             peakingFilter(
                 sampleRateHz.toDouble(),
@@ -211,7 +211,7 @@ class TenBandEqualizerAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun onFlush() {
-        states.forEach { channelStates -> channelStates.forEach { it.clear() } }
+        states.forEach { channelStates -> channelStates.forEach { it.clear() } }\n        compressorEnvelope.fill(0.0)
     }
 
     override fun onReset() {
