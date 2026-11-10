@@ -413,12 +413,12 @@ class StreamingCentreActivity : ComponentActivity() {
 
     private fun requestDlnaCast(receiver: StreamingReceiver, scope: kotlinx.coroutines.CoroutineScope, report: (String) -> Unit) {
         val web = browser ?: return report("Open a streaming page and start a video first.")
-        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && /^https?:\\/\\//i.test(x.currentSrc)).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
+        val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && (x.currentSrc.startsWith('https://') || x.currentSrc.startsWith('http://'))).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
         web.evaluateJavascript(script) { encoded ->
             runCatching {
                 val payload = JSONObject(org.json.JSONArray("[$encoded]").getString(0))
                 val url = payload.optString("url")
-                require(url.startsWith("https://") || url.startsWith("http://")) { "This page does not expose a direct video URL. Use the provider's own Cast button." }
+                require(url.startsWith("https://")) { "This page does not expose a direct video URL. Use the provider's own Cast button." }
                 val mime = payload.optString("type").ifBlank {
                     when (Uri.parse(url).lastPathSegment?.substringAfterLast('.', "")?.lowercase()) {
                         "m3u8" -> "application/vnd.apple.mpegurl"
