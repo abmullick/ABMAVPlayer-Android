@@ -76,7 +76,7 @@ class LocalMediaHttpServer(
             val requestLine = readLine(input) ?: return
             val parts = requestLine.split(" ")
             if (parts.size < 2 || parts[1] != "/$accessToken/media") {
-                output.write("HTTP/1.1 404 Not Found\\r\\nConnection: close\\r\\n\\r\\n".toByteArray())
+                output.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".toByteArray())
                 output.flush()
                 return
             }
