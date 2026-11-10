@@ -32,7 +32,7 @@ class LocalMediaHttpServer(
             ?: error("Cannot open the selected media document")
         fileLength = afd.length
         afd.close()
-        if (fileLength < 0L) {
+        if (fileLength <= 0L) {
             error("This media provider does not expose a seekable file length")
         }
         val socket = ServerSocket(0, 8, java.net.InetAddress.getByName("0.0.0.0"))
@@ -105,6 +105,7 @@ class LocalMediaHttpServer(
                 append("Content-Length: $length\r\n")
                 if (partial) append("Content-Range: bytes $start-$end/$fileLength\r\n")
                 append("Access-Control-Allow-Origin: *\r\n")
+                append("Cache-Control: no-store\r\n")
                 append("Connection: close\r\n\r\n")
             }
             output.write(headers.toByteArray(Charsets.US_ASCII))
@@ -115,8 +116,12 @@ class LocalMediaHttpServer(
                 var toSkip = start
                 while (toSkip > 0L) {
                     val skipped = stream.skip(toSkip)
-                    if (skipped <= 0L) break
-                    toSkip -= skipped
+                    if (skipped <= 0L) {
+                        if (stream.read() < 0) break
+                        toSkip--
+                    } else {
+                        toSkip -= skipped
+                    }
                 }
                 val buffer = ByteArray(64 * 1024)
                 var remaining = length
