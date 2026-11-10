@@ -48,6 +48,7 @@ import com.abm.avplayer.casting.LocalCastMediaSource
 import com.abm.avplayer.casting.LocalMediaQueueHttpServer
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaQueueItem
+import com.google.android.gms.cast.MediaTrack
 import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
 import com.google.android.gms.cast.MediaStatus
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -81,6 +82,8 @@ class MainActivity : ComponentActivity() {
     private val castMessageState = mutableStateOf("")
     private val castShuffleState = mutableStateOf(false)
     private val castRepeatModeState = mutableIntStateOf(Player.REPEAT_MODE_OFF)
+    private val castSubtitleAvailableState = mutableStateOf(false)
+    private val castSubtitleEnabledState = mutableStateOf(false)
     private var castOriginalFutureOrder: List<Int>? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controllerState = mutableStateOf<MediaController?>(null)
@@ -119,6 +122,8 @@ class MainActivity : ComponentActivity() {
             val castMessage by castMessageState
             val castShuffleEnabled by castShuffleState
             val castRepeatMode by castRepeatModeState
+            val castSubtitleAvailable by castSubtitleAvailableState
+            val castSubtitleEnabled by castSubtitleEnabledState
 
             val picker = rememberLauncherForActivityResult(
                 ActivityResultContracts.OpenMultipleDocuments()
@@ -203,6 +208,9 @@ class MainActivity : ComponentActivity() {
                                 MediaStatus.REPEAT_MODE_REPEAT_SINGLE -> Player.REPEAT_MODE_ONE
                                 else -> Player.REPEAT_MODE_OFF
                             }
+                            val castTracks = remote.mediaInfo?.mediaTracks.orEmpty()
+                            castSubtitleAvailableState.value = castTracks.any { it.type == MediaTrack.TYPE_TEXT }
+                            castSubtitleEnabledState.value = status?.activeTrackIds?.contains(1L) == true
                             position = remote.approximateStreamPosition.coerceAtLeast(0L)
                             duration = remote.streamDuration.coerceAtLeast(0L)
                             if (duration > 0L) progress = (position.toFloat() / duration).coerceIn(0f, 1f)
@@ -272,6 +280,18 @@ class MainActivity : ComponentActivity() {
                             hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
                             castShuffleEnabled = castShuffleEnabled, castRepeatMode = castRepeatMode,
+                            castSubtitleAvailable = castSubtitleAvailable, castSubtitleEnabled = castSubtitleEnabled,
+                            onCastSubtitleToggle = {
+                                val remote = castContext?.sessionManager?.currentCastSession?.remoteMediaClient
+                                if (remote != null && castSubtitleAvailableState.value) {
+                                    val ids = if (castSubtitleEnabledState.value) longArrayOf() else longArrayOf(1L)
+                                    remote.setActiveMediaTracks(ids).setResultCallback { result ->
+                                        castMessageState.value = if (result.status.isSuccess) {
+                                            if (ids.isEmpty()) "Cast subtitles turned off" else "Cast subtitles enabled"
+                                        } else "TV could not change subtitles (error ${result.status.statusCode})"
+                                    }
+                                }
+                            },
                             progress = progress,
                             onBrowse = { picker.launch(arrayOf("audio/*", "video/*")) },
                             onLibrary = { page = "library" },
@@ -383,6 +403,8 @@ class MainActivity : ComponentActivity() {
                     castMessageState.value = "Disconnected"
                     castShuffleState.value = false
                     castRepeatModeState.intValue = Player.REPEAT_MODE_OFF
+                    castSubtitleAvailableState.value = false
+                    castSubtitleEnabledState.value = false
                     castOriginalFutureOrder = null
                     localCastServer?.close()
                     localCastServer = null
@@ -438,9 +460,19 @@ class MainActivity : ComponentActivity() {
             localCastQueueServer?.close()
             localCastQueueServer = null
 
+            val currentItem = controllerState.value?.currentMediaItem
+            val currentConfig = currentItem?.localConfiguration
+            val selectedSubtitle = if (currentConfig?.uri == selected.let { Uri.parse(it.uri) }) {
+                currentConfig.subtitleConfigurations.firstOrNull { it.mimeType == MimeTypes.TEXT_VTT }
+            } else null
+            val selectedSubtitleUri = selectedSubtitle?.uri
+            val selectedSubtitleMime = selectedSubtitle?.mimeType ?: MimeTypes.TEXT_VTT
             val localSources = supported.mapIndexedNotNull { index, item ->
                 if (item.second.scheme == "http" || item.second.scheme == "https") null
                 else LocalCastMediaSource("item$index", item.second, item.third)
+            }.toMutableList()
+            if (selectedSubtitleUri != null && selectedSubtitleUri.scheme != "http" && selectedSubtitleUri.scheme != "https") {
+                localSources += LocalCastMediaSource("subtitle$selectedIndex", selectedSubtitleUri, "text/vtt")
             }
             val queueServer = if (localSources.isNotEmpty()) {
                 LocalMediaQueueHttpServer(contentResolver, localSources).also { localCastQueueServer = it }
@@ -456,11 +488,26 @@ class MainActivity : ComponentActivity() {
                 val metadata = CastMediaMetadata(metadataType).apply {
                     putString(CastMediaMetadata.KEY_TITLE, file.title)
                 }
-                val info = MediaInfo.Builder(mediaUrl)
+                val infoBuilder = MediaInfo.Builder(mediaUrl)
                     .setContentType(mime)
                     .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
                     .setMetadata(metadata)
-                    .build()
+                if (index == selectedIndex && selectedSubtitle != null) {
+                    val subtitleUrl = if (selectedSubtitleUri?.scheme == "http" || selectedSubtitleUri?.scheme == "https") {
+                        selectedSubtitleUri.toString()
+                    } else queueServer?.urlFor("subtitle$selectedIndex")
+                    if (subtitleUrl != null) {
+                        val subtitleTrack = MediaTrack.Builder(1L, MediaTrack.TYPE_TEXT)
+                            .setName(selectedSubtitle.label ?: selectedSubtitle.language ?: "Subtitles")
+                            .setSubtype(MediaTrack.SUBTYPE_SUBTITLES)
+                            .setContentId(subtitleUrl)
+                            .setContentType("text/vtt")
+                            .setLanguage(selectedSubtitle.language ?: "und")
+                            .build()
+                        infoBuilder.setMediaTracks(listOf(subtitleTrack))
+                    }
+                }
+                val info = infoBuilder.build()
                 MediaQueueItem.Builder(info).setAutoplay(true).setPreloadTime(20.0).build()
             }
 
@@ -485,6 +532,7 @@ class MainActivity : ComponentActivity() {
             }
             val skipped = library.size - supported.size
             if (skipped > 0) castMessageState.value = "Sending ${supported.size} compatible items; skipped $skipped unsupported file(s)"
+            if (selectedSubtitle != null) castMessageState.value = "Cast queue sent with WebVTT subtitles available for the selected item"
         }.onFailure {
             localCastQueueServer?.close()
             localCastQueueServer = null
@@ -631,6 +679,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+private fun CastSubtitleControl(available: Boolean, enabled: Boolean, onToggle: () -> Unit) {
+    if (available) {
+        IconButton(onClick = onToggle) {
+            Icon(Icons.Default.Subtitles, contentDescription = if (enabled) "Turn Cast subtitles off" else "Turn Cast subtitles on",
+                tint = if (enabled) Cyan else Color.White)
+        }
+    }
+}
+
+@Composable
 private fun CastRouteButton() {
     AndroidView(
         factory = { context ->
@@ -762,6 +820,9 @@ private fun PlayerScreen(
     playing: Boolean,
     castShuffleEnabled: Boolean,
     castRepeatMode: Int,
+    castSubtitleAvailable: Boolean,
+    castSubtitleEnabled: Boolean,
+    onCastSubtitleToggle: () -> Unit,
     position: Long,
     duration: Long,
     progress: Float,
@@ -833,7 +894,9 @@ private fun PlayerScreen(
                         IconButton(onClick = onNext, enabled = true) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                         }
-                        AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
+                        CastSubtitleControl(castSubtitleAvailable, castSubtitleEnabled, onCastSubtitleToggle)
+                        CastSubtitleControl(castSubtitleAvailable, castSubtitleEnabled, onCastSubtitleToggle)
+                AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
                     }
                     Text(formatTime(duration), color = Muted, fontSize = 11.sp)
                 }
