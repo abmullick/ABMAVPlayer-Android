@@ -261,6 +261,37 @@ class StreamingCentreActivity : ComponentActivity() {
                         Text(castMessage, color = Cyan, fontSize = 11.sp,
                             modifier = Modifier.fillMaxWidth().background(Raised).padding(horizontal = 14.dp, vertical = 7.dp))
                     }
+                    if (activeReceiver != null) {
+                        val receiver = activeReceiver!!
+                        Column(Modifier.fillMaxWidth().background(Raised).padding(horizontal = 12.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "  ·  DIAL app", color = Muted, fontSize = 10.sp)
+                                }
+                                TextButton(onClick = { activeReceiver = null; receiverPlaybackState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (receiver.supportsDlna) {
+                                    TextButton(onClick = { seekSelectedReceiver(-30) }, enabled = !receiverControlBusy) { Text("-30s", color = Cyan) }
+                                    TextButton(onClick = { controlSelectedReceiver("Play") }, enabled = !receiverControlBusy) { Text("Play", color = Cyan) }
+                                    TextButton(onClick = { controlSelectedReceiver("Pause") }, enabled = !receiverControlBusy) { Text("Pause", color = Cyan) }
+                                    TextButton(onClick = { controlSelectedReceiver("Stop") }, enabled = !receiverControlBusy) { Text("Stop", color = Cyan) }
+                                    TextButton(onClick = { seekSelectedReceiver(30) }, enabled = !receiverControlBusy) { Text("+30s", color = Cyan) }
+                                } else if (receiver.supportsDial) {
+                                    TextButton(onClick = {
+                                        scope.launch {
+                                            StreamingReceiverDiscovery.stopDialYoutube(receiver).onSuccess {
+                                                castMessage = "YouTube app stopped on " + receiver.name
+                                            }.onFailure {
+                                                castMessage = "Stop failed: " + (it.message ?: "receiver error")
+                                            }
+                                        }
+                                    }) { Text("Stop YouTube", color = Cyan) }
+                                }
+                            }
+                        }
+                    }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         AndroidView(
                             factory = { context -> browser ?: createBrowser(context).also { browser = it } },
@@ -372,10 +403,20 @@ class StreamingCentreActivity : ComponentActivity() {
                                 }
                                 val selectedReceiver = receivers.firstOrNull { it.id == selectedReceiverId }
                                 if (selectedReceiver?.supportsDlna == true) {
-                                    Button(onClick = { requestDlnaCast(selectedReceiver, scope) { castMessage = it }; receiverPanel = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23675F))) { Text("Play current video on selected TV") }
+                                    Button(onClick = {
+                                        activeReceiver = selectedReceiver
+                                        receiverPlaybackState = "Starting…"
+                                        requestDlnaCast(selectedReceiver, scope) { castMessage = it }
+                                        receiverPanel = false
+                                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23675F))) { Text("Play current video on selected TV") }
                                 }
                                 if (selectedReceiver?.supportsDial == true) {
-                                    OutlinedButton(onClick = { launchDialYoutube(selectedReceiver, scope) { castMessage = it }; receiverPanel = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
+                                    OutlinedButton(onClick = {
+                                        activeReceiver = selectedReceiver
+                                        receiverPlaybackState = "Launching…"
+                                        launchDialYoutube(selectedReceiver, scope) { castMessage = it }
+                                        receiverPanel = false
+                                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
                                 }
                                 Text("DRM-protected or encrypted streams cannot be extracted. Use the provider's own Cast control for those services.", color = Muted, fontSize = 10.sp)
                                 TextButton(onClick = { receiverPanel = false }, modifier = Modifier.align(Alignment.End)) { Text("Close", color = Cyan) }
