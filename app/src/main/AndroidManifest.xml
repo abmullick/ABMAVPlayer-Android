@@ -27,6 +27,10 @@
             </intent-filter>
         </activity>
         <service
+            android:name=".casting.CastStreamService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <service
             android:name=".playback.PlayerService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
