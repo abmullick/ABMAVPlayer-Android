@@ -223,6 +223,8 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
     var compressor by remember { mutableStateOf(TenBandEqSettings.compressorEnabled) }
     var threshold by remember { mutableStateOf(TenBandEqSettings.compressorThresholdDb) }
     var ratio by remember { mutableStateOf(TenBandEqSettings.compressorRatio) }
+    var attackMs by remember { mutableStateOf(TenBandEqSettings.compressorAttackMs) }
+    var releaseMs by remember { mutableStateOf(TenBandEqSettings.compressorReleaseMs) }
     var makeup by remember { mutableStateOf(TenBandEqSettings.compressorMakeupDb) }
     val presets = listOf("Flat", "Bass Boost", "Treble Boost", "Rock", "Classical", "Jazz", "Vocal")
 
@@ -317,6 +319,14 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                             Slider(value = ratio, onValueChange = {
                                 ratio = it; TenBandEqSettings.compressorRatio = it; TenBandEqSettings.save(context)
                             }, valueRange = 1f..10f, enabled = compressor)
+                            Text("Attack: %.0f ms".format(attackMs), color = Muted, fontSize = 11.sp)
+                            Slider(value = attackMs, onValueChange = {
+                                attackMs = it; TenBandEqSettings.compressorAttackMs = it; TenBandEqSettings.save(context)
+                            }, valueRange = 1f..100f, enabled = compressor)
+                            Text("Release: %.0f ms".format(releaseMs), color = Muted, fontSize = 11.sp)
+                            Slider(value = releaseMs, onValueChange = {
+                                releaseMs = it; TenBandEqSettings.compressorReleaseMs = it; TenBandEqSettings.save(context)
+                            }, valueRange = 10f..1000f, enabled = compressor)
                             Text("Make-up gain: %+.1f dB".format(makeup), color = Muted, fontSize = 11.sp)
                             Slider(value = makeup, onValueChange = {
                                 makeup = it; TenBandEqSettings.compressorMakeupDb = it; TenBandEqSettings.save(context)
