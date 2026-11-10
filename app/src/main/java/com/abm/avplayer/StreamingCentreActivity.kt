@@ -462,7 +462,6 @@ class StreamingCentreActivity : ComponentActivity() {
                                     if (receiver.supportsDlna) Text("DLNA playback: " + receiverPlaybackState + "  ·  " + receiverPosition + " / " + receiverDuration, color = Muted, fontSize = 10.sp)
                                     if (receiver.supportsDial) Text("DIAL app state: " + receiverDialAppState, color = Muted, fontSize = 10.sp)
                                     if (receiver.supportsDial) Text("YouTube remote command state: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
-                                    if (receiver.supportsDial) Text("YouTube remote command state: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = { activeReceiver = null; youtubeRemoteReady = false; youtubeRemotePlaybackState = "Not paired"; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
@@ -486,7 +485,6 @@ class StreamingCentreActivity : ComponentActivity() {
                                             if (youtubeRemoteReady) {
                                                 youtubeRemotePlaybackState = "Playing"
                                                 receiverConnectionState = "Connected"
-                                                receiverPlaybackState = "RUNNING"
                                             }
                                         }
                                     }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
