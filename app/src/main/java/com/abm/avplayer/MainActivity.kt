@@ -1,6 +1,7 @@
 package com.abm.avplayer
 
 import android.content.ComponentName
+import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -9,6 +10,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -239,6 +241,7 @@ class MainActivity : ComponentActivity() {
                             fullscreen = fullscreen,
                             onFullscreen = {
                                 fullscreen = !fullscreen
+                                requestedOrientation = if (fullscreen) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                                 val bars = WindowInsetsControllerCompat(window, window.decorView)
                                 if (fullscreen) {
                                     bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -419,6 +422,7 @@ private fun PlayerScreen(
     fullscreen: Boolean,
     onFullscreen: () -> Unit
 ) {
+    BackHandler(enabled = fullscreen, onBack = onFullscreen)
     if (fullscreen) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (hasMedia && player != null) {
