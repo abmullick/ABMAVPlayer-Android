@@ -248,7 +248,7 @@ object StreamingReceiverDiscovery {
     suspend fun controlYoutubeLounge(receiver: StreamingReceiver, action: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                require(action in setOf("play", "pause", "stop")) { "Unsupported YouTube remote command." }
+                require(action in setOf("play", "pause", "stop", "next", "previous")) { "Unsupported YouTube remote command." }
                 val session = youtubeSessions[receiver.id] ?: error("YouTube remote control is not paired. Launch a video first.")
                 sendYoutubeLoungeCommand(receiver, session, if (action == "stop") "stopVideo" else action, null)
             }
