@@ -118,6 +118,7 @@ class StreamingCentreActivity : ComponentActivity() {
             var receiverDuration by remember { mutableStateOf("00:00:00") }
             var receiverControlBusy by remember { mutableStateOf(false) }
             var youtubeRemoteReady by remember { mutableStateOf(false) }
+            var receiverDialAppState by remember { mutableStateOf("Unknown") }
             var youtubeRemotePlaybackState by remember { mutableStateOf("Not paired") }
             var castRemoteConnected by remember { mutableStateOf(false) }
             var castRemoteState by remember { mutableStateOf("Idle") }
@@ -168,6 +169,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             }
                             if (refreshed.supportsDial) {
                                 StreamingReceiverDiscovery.getDialApplicationStatus(refreshed).onSuccess {
+                                    receiverDialAppState = it.state
                                     if (!refreshed.supportsDlna) receiverPlaybackState = it.state
                                     if (it.state.equals("STOPPED", true)) {
                                         youtubeRemoteReady = false
@@ -253,6 +255,7 @@ class StreamingCentreActivity : ComponentActivity() {
                     } else false
                     val dialOk = if (receiver.supportsDial) {
                         StreamingReceiverDiscovery.getDialApplicationStatus(receiver).onSuccess {
+                            receiverDialAppState = it.state
                             if (!receiver.supportsDlna) receiverPlaybackState = it.state
                             if (it.state.equals("STOPPED", true)) {
                                 youtubeRemoteReady = false
@@ -456,7 +459,9 @@ class StreamingCentreActivity : ComponentActivity() {
                                 Column(Modifier.weight(1f)) {
                                     Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                     Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
-                                    Text((if (receiver.supportsDlna) "Playback: " else "DIAL app state: ") + receiverPlaybackState + if (receiver.supportsDlna) "  ·  " + receiverPosition + " / " + receiverDuration else "", color = Muted, fontSize = 10.sp)
+                                    if (receiver.supportsDlna) Text("DLNA playback: " + receiverPlaybackState + "  ·  " + receiverPosition + " / " + receiverDuration, color = Muted, fontSize = 10.sp)
+                                    if (receiver.supportsDial) Text("DIAL app state: " + receiverDialAppState, color = Muted, fontSize = 10.sp)
+                                    if (receiver.supportsDial) Text("YouTube remote command state: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
                                     if (receiver.supportsDial) Text("YouTube remote command state: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
@@ -498,6 +503,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 youtubeRemoteReady = false
                                                 youtubeRemotePlaybackState = "Not paired"
                                                 receiverPlaybackState = "STOPPED"
+                                                receiverDialAppState = "STOPPED"
                                                 receiverConnectionState = "Connected"
                                                 castMessage = "YouTube app closed on " + receiver.name
                                             }.onFailure { castMessage = "Close app failed: " + (it.message ?: "receiver error") }
@@ -642,7 +648,11 @@ class StreamingCentreActivity : ComponentActivity() {
                                         launchDialYoutube(selectedReceiver, scope) {
                                             castMessage = it
                                             youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(selectedReceiver)
-                                            if (youtubeRemoteReady) youtubeRemotePlaybackState = "Playing"
+                                            if (youtubeRemoteReady) {
+                                                youtubeRemotePlaybackState = "Playing"
+                                                receiverConnectionState = "Connected"
+                                                receiverDialAppState = "RUNNING"
+                                            }
                                         }
                                         receiverPanel = false
                                     }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
