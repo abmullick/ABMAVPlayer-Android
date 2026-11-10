@@ -99,10 +99,10 @@ object TenBandEqSettings {
     }
 
     fun updateReplayGain(tags: ReplayGainTags) {
-        replayGainTrackDb = tags.trackGainDb
-        replayGainAlbumDb = tags.albumGainDb
-        replayGainTrackPeak = tags.trackPeak
-        replayGainAlbumPeak = tags.albumPeak
+        tags.trackGainDb?.let { replayGainTrackDb = it }
+        tags.albumGainDb?.let { replayGainAlbumDb = it }
+        tags.trackPeak?.let { replayGainTrackPeak = it }
+        tags.albumPeak?.let { replayGainAlbumPeak = it }
     }
 
     fun resetReplayGainForTrack() {
