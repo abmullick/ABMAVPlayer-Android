@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
                         val subtitle = MediaItem.SubtitleConfiguration.Builder(subtitleUri)
                             .setMimeType(mime)
                             .setLanguage("und")
+                            .setLabel(subtitleUri.lastPathSegment ?: "External subtitle")
                             .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                             .build()
                         val updated = current.buildUpon()
