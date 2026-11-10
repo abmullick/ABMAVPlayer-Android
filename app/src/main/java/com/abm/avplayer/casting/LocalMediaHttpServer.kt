@@ -2,7 +2,6 @@ package com.abm.avplayer.casting
 
 import android.content.ContentResolver
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -25,7 +24,6 @@ class LocalMediaHttpServer(
     private val running = AtomicBoolean(false)
     private val clients = Executors.newCachedThreadPool()
     private var server: ServerSocket? = null
-    private var descriptor: ParcelFileDescriptor? = null
     private var fileLength: Long = -1L
     private var startOffset: Long = 0L
     private var mimeType: String = "application/octet-stream"
@@ -36,12 +34,10 @@ class LocalMediaHttpServer(
         if (running.get() && server != null) return mediaUrl()
         val afd = resolver.openAssetFileDescriptor(uri, "r")
             ?: error("Cannot open the selected media document")
-        descriptor = afd.parcelFileDescriptor
         startOffset = afd.startOffset
         fileLength = afd.length
         if (fileLength < 0L) {
             afd.close()
-            descriptor = null
             error("This media provider does not expose a seekable file length")
         }
         mimeType = resolver.getType(uri) ?: "application/octet-stream"
@@ -119,8 +115,8 @@ class LocalMediaHttpServer(
             output.write(headers.toByteArray(Charsets.US_ASCII))
             output.flush()
             if (parts[0] == "HEAD") return
-            val fd = descriptor?.fileDescriptor ?: return
-            FileInputStream(fd).channel.use { channel ->
+            val afd = resolver.openAssetFileDescriptor(uri, "r") ?: return
+            FileInputStream(afd.fileDescriptor).channel.use { channel ->
                 channel.position(startOffset + start)
                 val buffer = ByteArray(64 * 1024)
                 var remaining = length
@@ -132,6 +128,7 @@ class LocalMediaHttpServer(
                 }
                 output.flush()
             }
+            afd.close()
         }
     }
 
@@ -151,8 +148,6 @@ class LocalMediaHttpServer(
         if (!running.getAndSet(false)) return
         runCatching { server?.close() }
         server = null
-        runCatching { descriptor?.close() }
-        descriptor = null
         clients.shutdownNow()
     }
 }
