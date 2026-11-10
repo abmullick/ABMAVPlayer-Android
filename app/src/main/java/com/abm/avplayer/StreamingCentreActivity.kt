@@ -143,7 +143,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 val previous = activeReceiver ?: return
                 receiverReconnectBusy = true
                 lastReconnectAttemptMs = System.currentTimeMillis()
-                receiverConnectionState = "Reconnecting…" 
+                receiverConnectionState = "Reconnecting…"
                 scope.launch {
                     try {
                         val found = StreamingReceiverDiscovery.discover(this@StreamingCentreActivity)
@@ -152,6 +152,8 @@ class StreamingCentreActivity : ComponentActivity() {
                         if (refreshed == null) {
                             receiverConnectionState = "Offline"
                             receiverPlaybackState = "Waiting for TV"
+                            youtubeRemoteReady = false
+                            youtubeRemotePlaybackState = "Not paired"
                             castMessage = previous.name + " was not found. Check power and Wi-Fi, then retry."
                         } else {
                             activeReceiver = refreshed
@@ -162,12 +164,18 @@ class StreamingCentreActivity : ComponentActivity() {
                                     receiverPlaybackState = it.state
                                     receiverPosition = it.position
                                     receiverDuration = it.duration
-                                }.onFailure { receiverPlaybackState = "Connected · playback status unavailable" }
-                            } else {
-                                StreamingReceiverDiscovery.getDialApplicationStatus(refreshed).onSuccess {
-                                    receiverPlaybackState = it.state
-                                }.onFailure { receiverPlaybackState = "App status unavailable" }
+                                }.onFailure { receiverPlaybackState = "DLNA status unavailable" }
                             }
+                            if (refreshed.supportsDial) {
+                                StreamingReceiverDiscovery.getDialApplicationStatus(refreshed).onSuccess {
+                                    if (!refreshed.supportsDlna) receiverPlaybackState = it.state
+                                    if (it.state.equals("STOPPED", true)) {
+                                        youtubeRemoteReady = false
+                                        youtubeRemotePlaybackState = "Not paired"
+                                    }
+                                }.onFailure { if (!refreshed.supportsDlna) receiverPlaybackState = "App status unavailable" }
+                            }
+                            youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(refreshed)
                         }
                     } catch (error: Exception) {
                         receiverConnectionState = "Offline"
@@ -499,7 +507,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                 }
                             }
                             if (receiver.supportsDial && !receiver.supportsDlna) {
-                                Text("DIAL supports app launch, status and stop. Generic pause/resume is not part of the DIAL protocol; use the TV remote or the provider's own Cast controls.", color = Muted, fontSize = 10.sp)
+                                Text("DIAL handles app launch and status. ABM pairs YouTube Lounge for YouTube-specific Play, Pause and Stop; other TV apps require their own supported remote-control integration.", color = Muted, fontSize = 10.sp)
                             }
                         }
                     }
