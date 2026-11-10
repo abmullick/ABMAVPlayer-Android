@@ -25,7 +25,7 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 | Windows network receiver discovery | Android Cast discovery; do not promise arbitrary DLNA/Miracast parity | Platform-specific |
 | Streaming Centre provider cards | Dedicated Android WebView with official provider launch cards | Initial implementation: YouTube, Netflix, Prime Video, JioHotstar, Sony LIV and ZEE5 |
 | Streaming Centre browser controls | WebView history, reload, home, HTML5 fullscreen and external browser | Initial implementation; persistent WebView cookie sessions and HTTPS-only navigation |
-| Streaming Centre TV discovery | Android Cast route picker; native SSDP/DIAL discovery to follow | Partial: Google Cast route selection only; DLNA/UPnP and DIAL not yet implemented |
+| Streaming Centre TV discovery | Google Cast route picker + SSDP discovery for UPnP MediaRenderer and DIAL | Initial implementation: unified Find TVs panel, private-LAN device descriptions, protocol capability labels and receiver deduplication; physical-device validation remains |
 | Streaming Centre video handoff | Direct HTTPS HTML5 video URL through Cast SDK; provider-native handoff where available | Partial: direct URL handoff only; no tab mirroring, YouTube DIAL launch or protected/segmented stream extraction |
 | In-app update checker | GitHub Releases API + SHA-256 verification + Android package installer flow | Planned |
 
