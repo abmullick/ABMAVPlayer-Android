@@ -64,6 +64,7 @@ import org.json.JSONObject
 import com.abm.avplayer.streaming.StreamingReceiver
 import com.abm.avplayer.streaming.StreamingReceiverDiscovery
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private data class StreamingProvider(val name: String, val subtitle: String, val url: String, val accent: Color)
 
@@ -98,6 +99,11 @@ class StreamingCentreActivity : ComponentActivity() {
             var receivers by remember { mutableStateOf<List<StreamingReceiver>>(emptyList()) }
             var selectedReceiverId by remember { mutableStateOf<String?>(null) }
             var discoveryBusy by remember { mutableStateOf(false) }
+            var activeReceiver by remember { mutableStateOf<StreamingReceiver?>(null) }
+            var receiverPlaybackState by remember { mutableStateOf("Connecting…") }
+            var receiverPosition by remember { mutableStateOf("00:00:00") }
+            var receiverDuration by remember { mutableStateOf("00:00:00") }
+            var receiverControlBusy by remember { mutableStateOf(false) }
             val scope = rememberCoroutineScope()
 
             fun refreshReceivers() {
@@ -113,6 +119,56 @@ class StreamingCentreActivity : ComponentActivity() {
                     } finally { discoveryBusy = false }
                 }
             }
+            fun controlSelectedReceiver(action: String) {
+                val receiver = activeReceiver ?: return
+                if (!receiver.supportsDlna) return
+                receiverControlBusy = true
+                scope.launch {
+                    val result = StreamingReceiverDiscovery.controlDlna(receiver, action)
+                    castMessage = result.fold({ action + " command sent to " + receiver.name }, { "TV control failed: " + (it.message ?: "receiver error") })
+                    receiverControlBusy = false
+                    StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
+                        receiverPlaybackState = it.state
+                        receiverPosition = it.position
+                        receiverDuration = it.duration
+                    }
+                }
+            }
+
+            fun seekSelectedReceiver(deltaSeconds: Long) {
+                val receiver = activeReceiver ?: return
+                if (!receiver.supportsDlna) return
+                fun toSeconds(value: String): Long = value.split(":").takeIf { it.size == 3 }?.let { parts ->
+                    (parts[0].toLongOrNull() ?: 0L) * 3600 + (parts[1].toLongOrNull() ?: 0L) * 60 + (parts[2].toLongOrNull() ?: 0L)
+                } ?: 0L
+                val target = (toSeconds(receiverPosition) + deltaSeconds).coerceAtLeast(0)
+                val formatted = "%02d:%02d:%02d".format(target / 3600, (target % 3600) / 60, target % 60)
+                receiverControlBusy = true
+                scope.launch {
+                    val result = StreamingReceiverDiscovery.seekDlna(receiver, formatted)
+                    castMessage = result.fold({ "Seek sent to " + receiver.name }, { "Seek failed: " + (it.message ?: "receiver error") })
+                    receiverControlBusy = false
+                }
+            }
+
+            LaunchedEffect(activeReceiver) {
+                val receiver = activeReceiver ?: return@LaunchedEffect
+                while (activeReceiver?.id == receiver.id) {
+                    if (receiver.supportsDlna) {
+                        StreamingReceiverDiscovery.getDlnaPlaybackStatus(receiver).onSuccess {
+                            receiverPlaybackState = it.state
+                            receiverPosition = it.position
+                            receiverDuration = it.duration
+                        }.onFailure { receiverPlaybackState = "Status unavailable" }
+                    } else if (receiver.supportsDial) {
+                        StreamingReceiverDiscovery.getDialApplicationStatus(receiver).onSuccess {
+                            receiverPlaybackState = it.state
+                        }.onFailure { receiverPlaybackState = "Status unavailable" }
+                    }
+                    delay(4_000)
+                }
+            }
+
             SideEffect {
                 currentUrlState = { currentUrl = it }
                 titleState = { pageTitle = it }
