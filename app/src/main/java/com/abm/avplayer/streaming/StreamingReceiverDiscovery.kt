@@ -11,6 +11,8 @@ import java.net.InetAddress
 import java.net.MulticastSocket
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
 
 data class StreamingReceiver(
@@ -34,7 +36,10 @@ data class StreamingReceiver(
 data class DlnaPlaybackStatus(val state: String, val position: String, val duration: String)
 data class DialApplicationStatus(val state: String, val detail: String)
 
+private data class YoutubeLoungeSession(val token: String, val sid: String, val gsessionId: String, val aid: String?, var requestId: Int = 2)
+
 object StreamingReceiverDiscovery {
+    private val youtubeSessions = ConcurrentHashMap<String, YoutubeLoungeSession>()
     private const val SSDP_ADDRESS = "239.255.255.250"
     private const val SSDP_PORT = 1900
     private const val DIAL_TARGET = "urn:dial-multiscreen-org:service:dial:1"
@@ -174,25 +179,134 @@ object StreamingReceiverDiscovery {
         withContext(Dispatchers.IO) {
             runCatching {
                 require(videoId.matches(Regex("[A-Za-z0-9_-]{11}"))) { "Could not identify a valid YouTube video ID on this page." }
-                val base = receiver.dialApplicationUrl ?: error("This TV does not advertise a DIAL application endpoint.")
-                val endpoint = URL(URL(base), "YouTube")
-                require(endpoint.host.equals(receiver.address, true) && endpoint.protocol == "http" && isPrivateAddress(endpoint.host)) {
-                    "The TV application endpoint failed the local-network safety check."
-                }
-                val connection = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the TV's YouTube app.")
+                val endpoint = dialYoutubeEndpoint(receiver)
+                // Start the TV app first, then pair a YouTube Lounge remote session as Windows does.
+                val launch = openPrivateHttp(endpoint, "POST") ?: error("Could not contact the TV's YouTube app.")
                 try {
-                    connection.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
-                    connection.doOutput = true
-                    connection.outputStream.use { it.write("v=$videoId".toByteArray(StandardCharsets.UTF_8)) }
-                    if (connection.responseCode !in listOf(200, 201, 202)) {
-                        error("The TV rejected YouTube launch (HTTP ${connection.responseCode}).")
+                    launch.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+                    launch.doOutput = true
+                    launch.outputStream.use { it.write(ByteArray(0)) }
+                    if (launch.responseCode !in listOf(200, 201, 202)) error("The TV rejected YouTube launch (HTTP " + launch.responseCode + ").")
+                } finally { launch.disconnect() }
+
+                var screenId: String? = null
+                repeat(6) {
+                    val status = openPrivateHttp(endpoint, "GET")
+                    if (status != null) {
+                        try {
+                            if (status.responseCode in 200..299) {
+                                val body = status.inputStream.bufferedReader().use { it.readText().take(32_768) }
+                                val xml = parseXml(body)
+                                screenId = xml?.documentElement?.let { firstText(it, "screenId") }
+                                    ?: Regex("<screenId>([^<]+)</screenId>").find(body)?.groupValues?.getOrNull(1)
+                                    ?: Regex("[\\\"']screenId[\\\"']\\s*:\\s*[\\\"']([^\\\"']+)[\\\"']").find(body)?.groupValues?.getOrNull(1)
+                            }
+                        } finally { status.disconnect() }
                     }
-                } finally {
-                    connection.disconnect()
+                    if (screenId.isNullOrBlank()) Thread.sleep(500)
                 }
+                val resolvedScreenId = screenId?.takeIf { it.isNotBlank() }
+                    ?: error("YouTube started, but the TV did not expose its screen ID.")
+
+                val tokenResponse = youtubeLoungePost(
+                    "/api/lounge/pairing/get_lounge_token_batch",
+                    "screen_ids=" + formEncode(resolvedScreenId)
+                )
+                val token = Regex("\\\"loungeToken\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+                    .find(tokenResponse)?.groupValues?.getOrNull(1)
+                    ?: error("YouTube did not provide a remote-control token for this TV.")
+
+                val bindPath = "/api/lounge/bc/bind?CVER=1&RID=1&VER=8&app=youtube-desktop&device=REMOTE_CONTROL&id=remote&loungeIdToken=" +
+                    formEncode(token) + "&name=ABM%20AV%20Player"
+                val bindResponse = youtubeLoungePost(bindPath, "")
+                val connectionFrame = Regex("\\[\\\"c\\\",\\\"([^\\\"]+)\\\",\\\"([^\\\"]+)").find(bindResponse)
+                    ?: error("YouTube did not return a valid remote-control session.")
+                val sid = connectionFrame.groupValues[1]
+                val aid = connectionFrame.groupValues[2]
+                val gsession = Regex("\\[\\\"S\\\",\\\"([^\\\"]+)").find(bindResponse)?.groupValues?.getOrNull(1)
+                    ?: error("YouTube did not return a valid remote-control session.")
+
+                val session = YoutubeLoungeSession(token, sid, gsession, aid)
+                youtubeSessions[receiver.id] = session
+                sendYoutubeLoungeCommand(receiver, session, "setPlaylist", videoId)
             }
         }
 
+    fun hasYoutubeRemoteSession(receiver: StreamingReceiver): Boolean =
+        youtubeSessions.containsKey(receiver.id)
+
+    suspend fun controlYoutubeLounge(receiver: StreamingReceiver, action: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(action in setOf("play", "pause", "stop")) { "Unsupported YouTube remote command." }
+                val session = youtubeSessions[receiver.id] ?: error("YouTube remote control is not paired. Launch a video first.")
+                sendYoutubeLoungeCommand(receiver, session, action, null)
+            }
+        }
+
+    suspend fun closeDialYoutube(receiver: StreamingReceiver): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint = dialYoutubeEndpoint(receiver)
+                val connection = openPrivateHttp(endpoint, "DELETE") ?: error("Could not contact the TV YouTube app.")
+                try {
+                    val code = connection.responseCode
+                    if (code !in 200..299 && code != 404) error("DIAL stop failed (HTTP " + code + ").")
+                } finally { connection.disconnect() }
+                youtubeSessions.remove(receiver.id)
+            }
+        }
+
+    private fun sendYoutubeLoungeCommand(
+        receiver: StreamingReceiver,
+        session: YoutubeLoungeSession,
+        command: String,
+        videoId: String?
+    ) {
+        val requestId = synchronized(session) { session.requestId++ }
+        val body = if (command == "setPlaylist") {
+            val id = videoId ?: error("Missing YouTube video ID.")
+            "count=1&ofs=1&req0__sc=setPlaylist&req0_currentIndex=0&req0_currentTime=0&req0_videoId=" +
+                formEncode(id) + "&req0_videoIds=" + formEncode(id)
+        } else {
+            "count=1&ofs=1&req0__sc=" + formEncode(command)
+        }
+        val path = "/api/lounge/bc/bind?CVER=1&RID=" + requestId +
+            "&VER=8&SID=" + formEncode(session.sid) +
+            "&gsessionid=" + formEncode(session.gsessionId) +
+            "&loungeIdToken=" + formEncode(session.token) +
+            (if (session.aid.isNullOrBlank()) "" else "&AID=" + formEncode(session.aid)) +
+            "&app=youtube-desktop&device=REMOTE_CONTROL&name=ABM%20AV%20Player&v=2"
+        val response = youtubeLoungePost(path, body)
+        if (response.contains("\\\"error\\\"", true) || response.contains("ERROR", true)) {
+            error("YouTube reported an error while processing the remote command.")
+        }
+        require(receiver.supportsDial) { "Selected receiver no longer advertises DIAL." }
+    }
+
+    private fun youtubeLoungePost(path: String, body: String): String {
+        val url = URL("https://www.youtube.com" + path)
+        val connection = url.openConnection() as? javax.net.ssl.HttpsURLConnection
+            ?: error("Could not open YouTube's secure remote-control endpoint.")
+        try {
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 7_000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", "ABM-AV-Player-Android/1.0")
+            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            connection.setRequestProperty("Origin", "https://www.youtube.com")
+            connection.doOutput = true
+            connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader()?.use { it.readText().take(1_048_576) }.orEmpty()
+            if (code !in 200..299) error("YouTube remote-control request failed (HTTP " + code + ").")
+            return response
+        } finally { connection.disconnect() }
+    }
+
+    private fun formEncode(value: String): String = URLEncoder.encode(value, "UTF-8")
 
     suspend fun getDlnaPlaybackStatus(receiver: StreamingReceiver): Result<DlnaPlaybackStatus> =
         withContext(Dispatchers.IO) {
