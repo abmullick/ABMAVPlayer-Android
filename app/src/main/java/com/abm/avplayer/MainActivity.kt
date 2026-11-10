@@ -374,10 +374,11 @@ class MainActivity : ComponentActivity() {
             val mime = suppliedMime?.takeUnless { it == "application/octet-stream" }
                 ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
                 ?: mimeFromName(uri.lastPathSegment)
+            localCastServer?.close()
+            localCastServer = null
             val url = if (uri.scheme == "http" || uri.scheme == "https") {
                 uri.toString()
             } else {
-                localCastServer?.close()
                 if (mime == "application/octet-stream" || mime == "video/x-matroska") {
                     error("This format is not supported by Google's Default Media Receiver. Try MP4, WebM, MP3 or AAC.")
                 }
@@ -619,14 +620,14 @@ private fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth()) {
                     Text(formatTime(position), color = Muted, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onPrevious) {
+                        IconButton(onClick = onPrevious, enabled = !castConnected) {
                             Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
                         }
                         IconButton(onClick = onPlayPause) {
                             Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (playing) "Pause" else "Play", tint = Cyan)
                         }
-                        IconButton(onClick = onNext) {
+                        IconButton(onClick = onNext, enabled = !castConnected) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                         }
                         AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
