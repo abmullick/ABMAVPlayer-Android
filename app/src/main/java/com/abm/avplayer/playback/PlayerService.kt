@@ -28,7 +28,7 @@ class PlayerService : MediaSessionService() {
             ): AudioSink {
                 val processor = TenBandEqualizerAudioProcessor()
                 return DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(true)
+                    .setEnableFloatOutput(false)
                     .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
                     .setAudioProcessors(arrayOf(processor))
                     .build()
