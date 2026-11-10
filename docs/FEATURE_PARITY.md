@@ -16,7 +16,7 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 | Audio track selection | Media3 TrackSelectionParameters | Implemented for selectable tracks exposed by the decoder |
 | Subtitle track selection | Media3 text tracks | Implemented for selectable embedded tracks, including Off |
 | External subtitle files | SAF + MediaItem subtitle configuration | Implemented for SRT, WebVTT and SSA/ASS sidecar files; device/decoder parser support applies |
-| Equalizer | Android audio-session Equalizer effect | Implemented using device-supported band count; not guaranteed to expose ten bands on every phone. A consistent app-owned 10-band DSP remains future work |
+| 10-band EQ and presets | App-owned Media3 PCM AudioProcessor with ten peaking biquad filters | Implemented: 31 Hz–16 kHz bands, ±12 dB, persistent settings and seven presets. Applies to decoded PCM; encoded passthrough is not processed |
 | ReplayGain / compressor | App-owned DSP or verified audio-processing extension | Planned |
 | Animated audio visualizer | Audio-session/PCM analysis where legally and technically supported | Planned |
 | Google Cast | Google Cast SDK sender and remote media client | Planned |
@@ -30,7 +30,7 @@ The Windows reference is documented in [ABMAVPlayer](https://github.com/abmullic
 
 - Android codec support varies by OS version, chipset and vendor. A file that plays through VLC on Windows is not automatically guaranteed to play on every Android phone.
 - Android does not expose the same global audio-loopback path as the Windows visualizer. A visualizer should analyse audio rendered by this app, not claim to capture other apps.
-- Android's system audio effects are device-dependent. The current equalizer attaches to the active Media3 audio session and exposes the number of bands provided by the device; it is not a guaranteed ten-band implementation. A consistent app-owned DSP equalizer remains future work.
+- The Android equalizer is an app-owned ten-band DSP in Media3's decoded PCM pipeline. Encoded passthrough cannot be altered by PCM processors; codec/device validation remains necessary.
 - Google Cast SDK is the appropriate Android sender path. It is not a drop-in replacement for Windows LibVLC renderer discovery or the Windows DLNA/DIAL implementation.
 - Protected streaming content is subject to provider DRM and device certification. The app must not attempt DRM circumvention.
 - Windows keyboard shortcuts and desktop drag-and-drop need touch-first equivalents on phones, with keyboard/mouse support on tablets and ChromeOS where practical.
