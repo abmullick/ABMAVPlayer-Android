@@ -227,6 +227,20 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }
 
+            fun seekYoutubeRemote(deltaSeconds: Double) {
+                val receiver = activeReceiver ?: return
+                if (!youtubeRemoteReady) return
+                val maximum = if (youtubeRemoteDuration > 0.0) youtubeRemoteDuration else Double.MAX_VALUE
+                val target = (youtubeRemotePosition + deltaSeconds).coerceIn(0.0, maximum)
+                receiverControlBusy = true
+                scope.launch {
+                    StreamingReceiverDiscovery.seekYoutubeLounge(receiver, target)
+                        .onSuccess { youtubeRemotePlaybackState = "Updating…"; castMessage = "YouTube seek sent to " + receiver.name }
+                        .onFailure { castMessage = "YouTube seek failed: " + (it.message ?: "receiver error") }
+                    receiverControlBusy = false
+                }
+            }
+
             fun seekSelectedReceiver(deltaSeconds: Long) {
                 val receiver = activeReceiver ?: return
                 if (!receiver.supportsDlna) return
@@ -508,11 +522,13 @@ class StreamingCentreActivity : ComponentActivity() {
                                         }
                                     }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") && this@StreamingCentreActivity.currentYoutubeVideoId() != null) { Text("Launch / Send video", color = Cyan) }
                                     if (youtubeRemoteReady) {
+                                        TextButton(onClick = { seekYoutubeRemote(-30.0) }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("−30s", color = Cyan) }
                                         TextButton(onClick = { controlYoutubeRemote("previous") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Previous", color = Cyan) }
                                         TextButton(onClick = { controlYoutubeRemote(if (youtubeRemotePlaybackState.equals("PLAYING", true)) "pause" else "play") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) {
-                                            Text(if (youtubeRemotePlaybackState == "Playing") "Pause" else "Resume", color = Cyan)
+                                            Text(if (youtubeRemotePlaybackState.equals("PLAYING", true)) "Pause" else "Resume", color = Cyan)
                                         }
                                         TextButton(onClick = { controlYoutubeRemote("next") }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("Next", color = Cyan) }
+                                        TextButton(onClick = { seekYoutubeRemote(30.0) }, enabled = !receiverControlBusy && (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected")) { Text("+30s", color = Cyan) }
                                         TextButton(onClick = { controlYoutubeRemote("stop") }, enabled = !receiverControlBusy) { Text("Stop video", color = Cyan) }
                                     }
                                     TextButton(onClick = {
