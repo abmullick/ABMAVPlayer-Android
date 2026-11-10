@@ -5,23 +5,24 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
 class PlayerService : MediaSessionService() {
+    private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).build()
-        mediaSession = MediaSession.Builder(this, player).build()
+        val exoPlayer = ExoPlayer.Builder(this).build()
+        player = exoPlayer
+        mediaSession = MediaSession.Builder(this, exoPlayer).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
 
     override fun onDestroy() {
-        mediaSession?.run {
-            player.release()
-            release()
-        }
+        mediaSession?.release()
         mediaSession = null
+        player?.release()
+        player = null
         super.onDestroy()
     }
 }
