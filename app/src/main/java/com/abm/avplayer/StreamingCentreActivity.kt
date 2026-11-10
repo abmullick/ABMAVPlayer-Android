@@ -117,6 +117,8 @@ class StreamingCentreActivity : ComponentActivity() {
             var receiverPosition by remember { mutableStateOf("00:00:00") }
             var receiverDuration by remember { mutableStateOf("00:00:00") }
             var receiverControlBusy by remember { mutableStateOf(false) }
+            var youtubeRemoteReady by remember { mutableStateOf(false) }
+            var youtubeRemotePlaybackState by remember { mutableStateOf("Not paired") }
             var castRemoteConnected by remember { mutableStateOf(false) }
             var castRemoteState by remember { mutableStateOf("Idle") }
             var castRemoteTitle by remember { mutableStateOf("") }
@@ -186,6 +188,31 @@ class StreamingCentreActivity : ComponentActivity() {
                         receiverPosition = it.position
                         receiverDuration = it.duration
                     }
+                }
+            }
+
+            fun controlYoutubeRemote(action: String) {
+                val receiver = activeReceiver ?: return
+                if (!youtubeRemoteReady) return
+                receiverControlBusy = true
+                scope.launch {
+                    StreamingReceiverDiscovery.controlYoutubeLounge(receiver, action)
+                        .onSuccess {
+                            youtubeRemotePlaybackState = when (action) {
+                                "play" -> "Playing"
+                                "pause" -> "Paused"
+                                else -> "Stopped"
+                            }
+                            castMessage = "YouTube " + action + " command sent to " + receiver.name
+                        }
+                        .onFailure {
+                            castMessage = "YouTube remote control failed: " + (it.message ?: "receiver error")
+                            if (it.message?.contains("not paired", true) == true) {
+                                youtubeRemoteReady = false
+                                youtubeRemotePlaybackState = "Not paired"
+                            }
+                        }
+                    receiverControlBusy = false
                 }
             }
 
@@ -589,7 +616,11 @@ class StreamingCentreActivity : ComponentActivity() {
                                     OutlinedButton(onClick = {
                                         activeReceiver = selectedReceiver
                                         receiverPlaybackState = "Launching…"
-                                        launchDialYoutube(selectedReceiver, scope) { castMessage = it }
+                                        launchDialYoutube(selectedReceiver, scope) {
+                                            castMessage = it
+                                            youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(selectedReceiver)
+                                            if (youtubeRemoteReady) youtubeRemotePlaybackState = "Playing"
+                                        }
                                         receiverPanel = false
                                     }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) { Text("Launch YouTube on selected TV") }
                                 }
