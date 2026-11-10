@@ -254,7 +254,7 @@ private fun EqualizerDialog(player: Player, onDismiss: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Presets", color = Cyan, fontSize = 11.sp)
                         Spacer(Modifier.weight(1f))
-                        androidx.compose.material3.Box {
+                        Box {
                             TextButton(onClick = { presetsOpen = true }) {
                                 Text("Choose preset", color = Cyan)
                             }
