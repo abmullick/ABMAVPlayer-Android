@@ -133,6 +133,38 @@ class StreamingCentreActivity : ComponentActivity() {
             var castRemoteDuration by remember { mutableLongStateOf(0L) }
             val scope = rememberCoroutineScope()
 
+            fun controlGoogleCast(action: String, targetPositionMs: Long? = null) {
+                val remote = runCatching {
+                    CastContext.getSharedInstance(this@StreamingCentreActivity).sessionManager.currentCastSession?.remoteMediaClient
+                }.getOrNull()
+                if (remote == null) {
+                    castMessage = "No active Google Cast receiver is connected."
+                    return
+                }
+                receiverControlBusy = true
+                val pending = runCatching {
+                    when (action) {
+                        "play" -> remote.play()
+                        "pause" -> remote.pause()
+                        "stop" -> remote.stop()
+                        "seek" -> remote.seek(MediaSeekOptions.Builder().setPosition(targetPositionMs ?: 0L).build())
+                        else -> error("Unsupported Google Cast command.")
+                    }
+                }.getOrElse {
+                    receiverControlBusy = false
+                    castMessage = "Google Cast command failed: ${it.message ?: "receiver error"}"
+                    return
+                }
+                pending.setResultCallback { result ->
+                    castMessage = if (result.status.isSuccess) {
+                        "Google Cast ${action} command sent."
+                    } else {
+                        "Google Cast ${action} failed (status ${result.status.statusCode})."
+                    }
+                    receiverControlBusy = false
+                }
+            }
+
             fun refreshReceivers() {
                 discoveryBusy = true
                 castMessage = "Searching your local network for Google Cast, DLNA and YouTube DIAL devices…"
@@ -527,14 +559,14 @@ class StreamingCentreActivity : ComponentActivity() {
                                     Text(castRemoteTitle.ifBlank { "Connected receiver" }, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(formatCastTime(castRemotePosition) + " / " + formatCastTime(castRemoteDuration), color = Muted, fontSize = 10.sp)
                                 }
-                                TextButton(onClick = { remote?.let { if (it.mediaStatus?.playerState == MediaStatus.PLAYER_STATE_PLAYING) it.pause() else it.play() } }, enabled = remote != null) {
+                                TextButton(onClick = { controlGoogleCast(if (castRemoteState == "Playing" || castRemoteState == "Buffering") "pause" else "play") }, enabled = remote != null) {
                                     Text(if (castRemoteState == "Playing" || castRemoteState == "Buffering") "Pause" else "Play", color = Cyan)
                                 }
-                                TextButton(onClick = { remote?.stop() }, enabled = remote != null) { Text("Stop", color = Cyan) }
+                                TextButton(onClick = { controlGoogleCast("stop") }, enabled = remote != null) { Text("Stop", color = Cyan) }
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                TextButton(onClick = { remote?.let { it.seek(MediaSeekOptions.Builder().setPosition((it.approximateStreamPosition - 30_000L).coerceAtLeast(0L)).build()) } }, enabled = remote != null) { Text("−30s", color = Cyan) }
-                                TextButton(onClick = { remote?.let { it.seek(MediaSeekOptions.Builder().setPosition((it.approximateStreamPosition + 30_000L).coerceAtMost(if (it.streamDuration > 0) it.streamDuration else Long.MAX_VALUE)).build()) } }, enabled = remote != null) { Text("+30s", color = Cyan) }
+                                TextButton(onClick = { controlGoogleCast("seek", (castRemotePosition - 30_000L).coerceAtLeast(0L)) }, enabled = remote != null) { Text("−30s", color = Cyan) }
+                                TextButton(onClick = { controlGoogleCast("seek", (castRemotePosition + 30_000L).coerceAtMost(if (castRemoteDuration > 0L) castRemoteDuration else Long.MAX_VALUE)) }, enabled = remote != null) { Text("+30s", color = Cyan) }
                             }
                         }
                     }
