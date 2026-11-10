@@ -5,7 +5,6 @@ import androidx.media3.extractor.metadata.id3.CommentFrame
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.mp3.Mp3InfoReplayGain
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
-import kotlin.math.ln
 
 data class ReplayGainTags(
     val trackGainDb: Float? = null,
