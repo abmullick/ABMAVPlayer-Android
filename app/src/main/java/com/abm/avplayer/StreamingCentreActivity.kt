@@ -344,7 +344,8 @@ class StreamingCentreActivity : ComponentActivity() {
         val script = """JSON.stringify((() => { const v=[...document.querySelectorAll('video')].filter(x=>x.currentSrc && x.currentSrc.startsWith('https://')).sort((a,b)=>(b.videoWidth*b.videoHeight)-(a.videoWidth*a.videoHeight))[0]; return v ? {url:v.currentSrc,type:v.getAttribute('type')||'',title:document.title||'Streaming video'} : {url:'',type:'',title:document.title||''}; })())"""
         web.evaluateJavascript(script) { encoded ->
             runCatching {
-                val payload = JSONObject(encoded ?: "{}")
+                val decodedPayload = org.json.JSONArray("[$encoded]").getString(0)
+                val payload = JSONObject(decodedPayload)
                 val url = payload.optString("url")
                 require(url.startsWith("https://")) { "No directly addressable HTTPS video URL is exposed by this page. Use the provider's own Cast button where available." }
                 val type = payload.optString("type").ifBlank {
