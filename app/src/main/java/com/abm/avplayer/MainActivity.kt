@@ -1022,6 +1022,10 @@ private fun PlayerScreen(
             ) {
                 Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold)
+                if (castConnected && castQueueSummary.isNotBlank()) {
+                    Text(castQueueSummary, color = Violet, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp)
+                }
                 if (castConnected) Text("Casting to $castDeviceName · $castMessage", color = Cyan, fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 18.dp))
                 Slider(
@@ -1044,7 +1048,6 @@ private fun PlayerScreen(
                         IconButton(onClick = onNext, enabled = true) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                         }
-                        CastSubtitleControl(castSubtitleAvailable, castSubtitleEnabled, onCastSubtitleToggle)
                         CastSubtitleControl(castSubtitleAvailable, castSubtitleEnabled, onCastSubtitleToggle)
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
                     }
