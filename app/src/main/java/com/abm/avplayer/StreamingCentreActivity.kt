@@ -120,6 +120,9 @@ class StreamingCentreActivity : ComponentActivity() {
             var youtubeRemoteReady by remember { mutableStateOf(false) }
             var receiverDialAppState by remember { mutableStateOf("Unknown") }
             var youtubeRemotePlaybackState by remember { mutableStateOf("Not paired") }
+            var youtubeRemotePosition by remember { mutableDoubleStateOf(0.0) }
+            var youtubeRemoteDuration by remember { mutableDoubleStateOf(0.0) }
+            var youtubeRemoteVideoId by remember { mutableStateOf("") }
             var castRemoteConnected by remember { mutableStateOf(false) }
             var castRemoteState by remember { mutableStateOf("Idle") }
             var castRemoteTitle by remember { mutableStateOf("") }
@@ -209,12 +212,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 scope.launch {
                     StreamingReceiverDiscovery.controlYoutubeLounge(receiver, action)
                         .onSuccess {
-                            youtubeRemotePlaybackState = when (action) {
-                                "play" -> "Playing"
-                                "pause" -> "Paused"
-                                "stop" -> "Stopped"
-                                else -> youtubeRemotePlaybackState
-                            }
+                            youtubeRemotePlaybackState = "Updating…"
                             castMessage = "YouTube " + action + " command sent to " + receiver.name
                         }
                         .onFailure {
@@ -266,6 +264,19 @@ class StreamingCentreActivity : ComponentActivity() {
                             }
                         }.isSuccess
                     } else false
+                    if (youtubeRemoteReady && receiver.supportsDial) {
+                        StreamingReceiverDiscovery.getYoutubeLoungePlaybackStatus(receiver).onSuccess {
+                            youtubeRemotePlaybackState = it.state
+                            youtubeRemotePosition = it.currentTimeSeconds
+                            youtubeRemoteDuration = it.durationSeconds
+                            youtubeRemoteVideoId = it.videoId
+                        }.onFailure {
+                            if (it.message?.contains("not paired", true) == true) {
+                                youtubeRemoteReady = false
+                                youtubeRemotePlaybackState = "Not paired"
+                            }
+                        }
+                    }
                     val statusOk = dlnaOk || dialOk
                     if (statusOk) {
                         receiverConnectionState = "Connected"
@@ -464,7 +475,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                     Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
                                     if (receiver.supportsDlna) Text("DLNA playback: " + receiverPlaybackState + "  ·  " + receiverPosition + " / " + receiverDuration, color = Muted, fontSize = 10.sp)
                                     if (receiver.supportsDial) Text("DIAL app state: " + receiverDialAppState, color = Muted, fontSize = 10.sp)
-                                    if (receiver.supportsDial) Text("YouTube remote command state: " + youtubeRemotePlaybackState, color = Muted, fontSize = 10.sp)
+                                    if (receiver.supportsDial) Text("YouTube playback: " + youtubeRemotePlaybackState + "  ·  " + formatStreamingTime(youtubeRemotePosition) + " / " + formatStreamingTime(youtubeRemoteDuration), color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { reconnectActiveReceiver() }, enabled = !receiverReconnectBusy) { Text(if (receiverReconnectBusy) "…" else "Reconnect", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = { activeReceiver = null; youtubeRemoteReady = false; youtubeRemotePlaybackState = "Not paired"; receiverPlaybackState = "Disconnected"; receiverConnectionState = "Disconnected" }) { Text("Disconnect", color = Muted, fontSize = 10.sp) }
@@ -486,7 +497,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                             castMessage = it
                                             youtubeRemoteReady = StreamingReceiverDiscovery.hasYoutubeRemoteSession(receiver)
                                             if (youtubeRemoteReady) {
-                                                youtubeRemotePlaybackState = "Playing"
+                                                youtubeRemotePlaybackState = "Waiting for TV"
                                                 receiverConnectionState = "Connected"
                                                 receiverDialAppState = "RUNNING"
                                             } else {
@@ -815,6 +826,11 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }.onFailure { report(it.message ?: "Could not prepare DLNA playback.") }
         }
+    }
+
+    private fun formatStreamingTime(seconds: Double): String {
+        val total = seconds.toLong().coerceAtLeast(0L)
+        return "%02d:%02d:%02d".format(total / 3600L, (total % 3600L) / 60L, total % 60L)
     }
 
     private fun formatCastTime(milliseconds: Long): String {
