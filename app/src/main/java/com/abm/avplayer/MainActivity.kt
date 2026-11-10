@@ -44,7 +44,6 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.abm.avplayer.casting.LocalMediaHttpServer
-import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
 import com.google.android.gms.cast.MediaStatus
@@ -251,7 +250,6 @@ class MainActivity : ComponentActivity() {
                         PlayerScreen(
                             title = title, player = controller,
                             castConnected = castConnected, castDeviceName = castDeviceName, castMessage = castMessage,
-                            onCast = { openCastPicker() },
                             hasVideo = controller?.currentTracks?.groups?.any { it.type == C.TRACK_TYPE_VIDEO && it.isSupported } == true,
                             playing = playing, position = position, duration = duration,
                             progress = progress,
@@ -369,20 +367,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun openCastPicker() {
-        runCatching {
-            val context = castContext ?: CastContext.getSharedInstance(this)
-            val button = MediaRouteButton(this)
-            CastButtonFactory.setUpMediaRouteButton(this, button)
-            button.performClick()
-        }.onFailure { castMessageState.value = "Cast picker unavailable: ${it.message}" }
-    }
-
     private fun castMedia(uriText: String, title: String, suppliedMime: String?) {
         val session = castContext?.sessionManager?.currentCastSession ?: return
         runCatching {
             val uri = Uri.parse(uriText)
-            val mime = suppliedMime ?: contentResolver.getType(uri) ?: mimeFromName(uri.lastPathSegment)
+            val mime = suppliedMime?.takeUnless { it == "application/octet-stream" }
+                ?: contentResolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
+                ?: mimeFromName(uri.lastPathSegment)
             val url = if (uri.scheme == "http" || uri.scheme == "https") {
                 uri.toString()
             } else {
@@ -440,7 +431,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun CastRouteButton(onClick: () -> Unit) {
+private fun CastRouteButton() {
     AndroidView(
         factory = { context ->
             MediaRouteButton(context).also { CastButtonFactory.setUpMediaRouteButton(context, it) }
@@ -564,7 +555,6 @@ private fun PlayerScreen(
     castConnected: Boolean,
     castDeviceName: String,
     castMessage: String,
-    onCast: () -> Unit,
     player: Player?,
     hasVideo: Boolean,
     playing: Boolean,
@@ -661,7 +651,7 @@ private fun PlayerScreen(
                     Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                 }
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
-                CastRouteButton(onClick = onCast)
+                CastRouteButton()
                 IconButton(onClick = onFullscreen, enabled = hasVideo) {
                     Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Cyan)
                 }
@@ -703,6 +693,8 @@ private fun PlayerScreen(
                 Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (castConnected) Text("CASTING  ·  $castDeviceName  ·  $castMessage", color = Cyan, fontSize = 10.sp,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
                 Slider(
                     value = progress.coerceIn(0f, 1f),
                     onValueChange = onSeek,
