@@ -201,7 +201,11 @@ object StreamingReceiverDiscovery {
                 val serviceType = receiver.avTransportServiceType ?: error("Missing DLNA AVTransport service type.")
                 val transport = parseXml(soap(endpoint, serviceType, "GetTransportInfo", "<InstanceID>0</InstanceID>"))
                     ?: error("TV returned an invalid transport status.")
-                val position = parseXml(soap(endpoint, serviceType, "GetPositionInfo", "<InstanceID>0</InstanceID>"))
+                // Some renderers expose transport state but reject position queries; keep the
+                // connection healthy and show an unknown position rather than marking the TV offline.
+                val position = runCatching {
+                    parseXml(soap(endpoint, serviceType, "GetPositionInfo", "<InstanceID>0</InstanceID>"))
+                }.getOrNull()
                 DlnaPlaybackStatus(
                     state = firstText(transport.documentElement, "CurrentTransportState") ?: "UNKNOWN",
                     position = position?.let { firstText(it.documentElement, "RelTime") } ?: "00:00:00",
