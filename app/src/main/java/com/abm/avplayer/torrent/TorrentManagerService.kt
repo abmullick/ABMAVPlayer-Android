@@ -45,6 +45,7 @@ class TorrentManagerService : Service() {
     private val binder = LocalBinder()
     private lateinit var session: SessionManager
     private val handles = ConcurrentHashMap<String, TorrentHandle>()
+    private val knownHashes = ConcurrentHashMap.newKeySet<String>()
     private val errors = ConcurrentHashMap<String, String>()
     private val pausedHashes = ConcurrentHashMap.newKeySet<String>()
     private val downloadRoot by lazy { File(getExternalFilesDir(null), "Torrent Downloads").apply { mkdirs() } }
@@ -73,6 +74,7 @@ class TorrentManagerService : Service() {
         val handle = handles[hash]
         if (handle != null && handle.isValid()) return hash
         session.download(uri, File(downloadRoot, hash), torrent_flags_t())
+        knownHashes.add(hash)
         return hash
     }
 
@@ -83,12 +85,14 @@ class TorrentManagerService : Service() {
         require(hash.matches(Regex("[0-9a-fA-F]{40}"))) { "Only v1/hybrid torrent metadata is currently supported." }
         session.download(info, File(downloadRoot, hash))
         session.find(info)?.let { handles[hash] = it }
+        knownHashes.add(hash)
         return hash
     }
 
     fun refresh(): List<TorrentTaskSnapshot> {
-        return handles.entries.mapNotNull { (hash, handle) ->
+        return knownHashes.mapNotNull { hash ->
             runCatching {
+                val handle = handles[hash]?.takeIf { it.isValid() } ?: session.find(Sha1Hash(hash))?.also { handles[hash] = it } ?: return@mapNotNull null
                 if (!handle.isValid()) return@mapNotNull null
                 val status = handle.status(true)
                 val metadata = handle.torrentFile()
@@ -139,6 +143,7 @@ class TorrentManagerService : Service() {
         if (deleteData) File(downloadRoot, hash).deleteRecursively()
         errors.remove(hash)
         pausedHashes.remove(hash)
+        knownHashes.remove(hash)
     }
 
     fun setRateLimits(downloadBytesPerSecond: Int, uploadBytesPerSecond: Int) {
@@ -202,6 +207,7 @@ class TorrentManagerService : Service() {
     override fun onDestroy() {
         Thread({ runCatching { session.stop() } }, "ABM-Torrent-Shutdown").apply { isDaemon = true; start() }
         handles.clear()
+        knownHashes.clear()
         pausedHashes.clear()
         super.onDestroy()
     }
