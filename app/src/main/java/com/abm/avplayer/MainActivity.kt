@@ -69,12 +69,24 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-val Canvas = Color(0xFF090B12)
-val Panel = Color(0xFF141925)
-val Raised = Color(0xFF1B2332)
-val Cyan = Color(0xFF54D8E8)
-val Violet = Color(0xFF9A7BFF)
-val Muted = Color(0xFF929BAE)
+// Shared ABM light design tokens. Keep the canvas genuinely bright white;
+ // use soft neutral surfaces and restrained, high-contrast accents.
+val Canvas = Color(0xFFFFFFFF)
+val Panel = Color(0xFFF7F9FC)
+val Raised = Color(0xFFEDF1F6)
+val Cyan = Color(0xFF087F8C)
+val Violet = Color(0xFF6655B8)
+val Muted = Color(0xFF667085)
+val Ink = Color(0xFF17212F)
+
+private fun ComponentActivity.applyAbmLightSystemBars() {
+    window.statusBarColor = android.graphics.Color.WHITE
+    window.navigationBarColor = android.graphics.Color.WHITE
+    WindowInsetsControllerCompat(window, window.decorView).apply {
+        isAppearanceLightStatusBars = true
+        isAppearanceLightNavigationBars = true
+    }
+}
 
 class MainActivity : ComponentActivity() {
     private var castContext: CastContext? = null
@@ -112,6 +124,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyAbmLightSystemBars()
         setupCast()
         val token = SessionToken(this, ComponentName(this, com.abm.avplayer.playback.PlayerService::class.java))
         controllerFuture = MediaController.Builder(this, token).buildAsync()
@@ -269,7 +282,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MaterialTheme {
+            MaterialTheme(colorScheme = lightColorScheme(
+                primary = Cyan, onPrimary = Color.White,
+                secondary = Violet, background = Canvas, onBackground = Ink,
+                surface = Panel, onSurface = Ink,
+                surfaceVariant = Raised, onSurfaceVariant = Muted
+            )) {
                 Surface(Modifier.fillMaxSize(), color = Canvas) {
                     if (page == "library") {
                         LibraryScreen(
@@ -1060,7 +1078,7 @@ private fun PlayerScreen(
     } else {
         Column(
             Modifier.fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xFF111827), Canvas, Canvas)))
+                .background(Brush.verticalGradient(listOf(Color(0xFFF2F6FA), Color.White, Canvas)))
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -1089,7 +1107,7 @@ private fun PlayerScreen(
                 Box(
                     Modifier.fillMaxWidth().weight(1f).padding(12.dp).clip(RoundedCornerShape(19.dp))
                         .background(Brush.linearGradient(
-                            listOf(Color(0xFF202B40), Color(0xFF151C2B), Color(0xFF241D3D))
+                            listOf(Color(0xFFEAF1F7), Color(0xFFEFF1FA), Color(0xFFF5F1FB))
                         )),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1112,7 +1130,7 @@ private fun PlayerScreen(
                             Icon(Icons.Default.GraphicEq, contentDescription = null,
                                 tint = Cyan, modifier = Modifier.size(68.dp))
                             Spacer(Modifier.height(10.dp))
-                            Text("YOUR MEDIA. YOUR SPACE.", color = Color.White.copy(alpha = .75f),
+                            Text("YOUR MEDIA. YOUR SPACE.", color = Muted,
                                 fontSize = 10.sp, letterSpacing = 2.sp)
                         }
                     }
@@ -1187,7 +1205,7 @@ private fun PlayerScreen(
             }
             Button(onClick = onStreaming, modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(15.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF20283A))) {
+                colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
                 Icon(Icons.Default.Language, contentDescription = null, tint = Cyan)
                 Spacer(Modifier.width(9.dp))
                 Text("Streaming services", color = Color.White)
