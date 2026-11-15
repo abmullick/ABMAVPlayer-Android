@@ -518,12 +518,7 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }
 
-            MaterialTheme(colorScheme = lightColorScheme(
-                primary = Cyan, onPrimary = Color.White,
-                secondary = Violet, background = Canvas, onBackground = Ink,
-                surface = Panel, onSurface = Ink,
-                surfaceVariant = Raised, onSurfaceVariant = Muted
-            )) {
+            AbmTheme {
                 Column(Modifier.fillMaxSize().background(Canvas)) {
                     Row(
                         Modifier.fillMaxWidth().background(Panel).padding(horizontal = 8.dp, vertical = 5.dp),
