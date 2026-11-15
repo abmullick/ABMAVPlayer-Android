@@ -63,6 +63,7 @@ import com.abm.avplayer.data.MediaDatabase
 import com.abm.avplayer.data.MediaFileEntity
 import com.abm.avplayer.data.MediaLibraryRepository
 import com.abm.avplayer.data.PlaylistEntity
+import com.abm.avplayer.torrent.TorrentActivity
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -371,6 +372,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
                             onStreaming = { startActivity(Intent(this@MainActivity, StreamingCentreActivity::class.java)) },
+                            onTorrent = { startActivity(Intent(this@MainActivity, TorrentActivity::class.java)) },
                             fullscreen = fullscreen,
                             onFullscreen = {
                                 fullscreen = !fullscreen
@@ -981,6 +983,7 @@ private fun PlayerScreen(
     onRepeat: () -> Unit,
     onPickSubtitle: () -> Unit,
     onStreaming: () -> Unit,
+    onTorrent: () -> Unit,
     fullscreen: Boolean,
     onFullscreen: () -> Unit
 ) {
@@ -1187,6 +1190,15 @@ private fun PlayerScreen(
                 Text("Streaming services", color = Ink)
                 Spacer(Modifier.weight(1f))
                 Text("YOUTUBE · NETFLIX · MORE", color = Muted, fontSize = 9.sp)
+            }
+            Button(onClick = onTorrent, modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(15.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
+                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = Violet)
+                Spacer(Modifier.width(9.dp))
+                Text("Torrent Stream", color = Ink)
+                Spacer(Modifier.weight(1f))
+                Text("MAGNET · TORRENT FILES", color = Muted, fontSize = 9.sp)
             }
             Text("ABM AV PLAYER  •  BUILT FOR YOUR MEDIA", Modifier.fillMaxWidth(),
                 color = Muted.copy(alpha = .7f), fontSize = 9.sp, letterSpacing = 1.2.sp)
