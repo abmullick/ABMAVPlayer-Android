@@ -48,6 +48,8 @@ class TorrentManagerService : Service() {
     private val knownHashes = ConcurrentHashMap.newKeySet<String>()
     private val errors = ConcurrentHashMap<String, String>()
     private val pausedHashes = ConcurrentHashMap.newKeySet<String>()
+    private val metadataConfigured = ConcurrentHashMap.newKeySet<String>()
+    private val selectedFiles = ConcurrentHashMap<String, Int>()
     private val downloadRoot by lazy { File(getExternalFilesDir(null), "Torrent Downloads").apply { mkdirs() } }
 
     override fun onCreate() {
@@ -96,6 +98,10 @@ class TorrentManagerService : Service() {
                 if (!handle.isValid()) return@mapNotNull null
                 val status = handle.status(true)
                 val metadata = handle.torrentFile()
+                if (status.hasMetadata() && metadataConfigured.add(hash) && !selectedFiles.containsKey(hash)) {
+                    val fileCount = metadata?.files()?.numFiles() ?: 0
+                    if (fileCount > 0) handle.prioritizeFiles(Array(fileCount) { Priority.IGNORE })
+                }
                 TorrentTaskSnapshot(
                     infoHash = hash,
                     name = status.name().ifBlank { "Retrieving metadata…" },
@@ -131,6 +137,8 @@ class TorrentManagerService : Service() {
         val priorities = Array(count) { Priority.IGNORE }
         priorities[index] = Priority.NORMAL
         handle.prioritizeFiles(priorities)
+        selectedFiles[hash] = index
+        metadataConfigured.add(hash)
         handle.resume()
     }
 
@@ -143,6 +151,8 @@ class TorrentManagerService : Service() {
         if (deleteData) File(downloadRoot, hash).deleteRecursively()
         errors.remove(hash)
         pausedHashes.remove(hash)
+        metadataConfigured.remove(hash)
+        selectedFiles.remove(hash)
         knownHashes.remove(hash)
     }
 
@@ -209,6 +219,8 @@ class TorrentManagerService : Service() {
         handles.clear()
         knownHashes.clear()
         pausedHashes.clear()
+        metadataConfigured.clear()
+        selectedFiles.clear()
         super.onDestroy()
     }
 
