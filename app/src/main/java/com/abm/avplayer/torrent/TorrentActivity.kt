@@ -102,8 +102,21 @@ class TorrentActivity : ComponentActivity() {
                     busy = true
                     runCatching {
                         val bytes = withContext(Dispatchers.IO) {
-                            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            val input = contentResolver.openInputStream(uri)
                                 ?: error("Could not read the selected torrent file.")
+                            input.use { stream ->
+                                val output = java.io.ByteArrayOutputStream()
+                                val buffer = ByteArray(8192)
+                                var total = 0
+                                while (true) {
+                                    val count = stream.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    require(total <= 16 * 1024 * 1024) { "Torrent metadata exceeds the 16 MiB safety limit." }
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            }
                         }
                         withContext(Dispatchers.IO) { torrentService?.addTorrent(bytes) ?: error("Torrent service is starting.") }
                     }.onSuccess { message = "Torrent added. Waiting for metadata and peers…" }
