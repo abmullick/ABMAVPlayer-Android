@@ -56,7 +56,7 @@ fun AdvancedPlaybackMenu(
 
     Box {
         IconButton(onClick = { menuOpen = true }, enabled = player != null) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Playback tools", tint = Color.White)
+            Icon(Icons.Default.MoreVert, contentDescription = "Playback tools", tint = Ink)
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
@@ -108,7 +108,7 @@ private fun SpeedDialog(player: Player, onDismiss: () -> Unit) {
     val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Playback speed", color = Color.White) },
+        title = { Text("Playback speed", color = Ink) },
         text = {
             Column {
                 speeds.forEach { speed ->
@@ -122,7 +122,7 @@ private fun SpeedDialog(player: Player, onDismiss: () -> Unit) {
                     ) {
                         Text(
                             if (speed == 1f) "Normal  •  1.0×" else "${speed}×",
-                            color = if (selected) Cyan else Color.White,
+                            color = if (selected) Cyan else Ink,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
@@ -144,7 +144,7 @@ private fun TrackDialog(
     val groups = player.currentTracks.groups.filter { it.type == trackType }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, color = Color.White) },
+        title = { Text(title, color = Ink) },
         text = {
             LazyColumn {
                 item {
@@ -161,7 +161,7 @@ private fun TrackDialog(
                     ) {
                         Text(
                             if (trackType == C.TRACK_TYPE_TEXT) "Off" else "Automatic",
-                            color = Color.White
+                            color = Ink
                         )
                     }
                 }
@@ -200,7 +200,7 @@ private fun TrackDialog(
                             Text(
                                 label + if (selected) "  ✓" else "",
                                 color = if (!group.isTrackSupported(trackIndex)) Muted
-                                    else if (selected) Cyan else Color.White
+                                    else if (selected) Cyan else Ink
                             )
                         }
                     }
@@ -241,14 +241,14 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("10-band equalizer", color = Color.White)
+                Text("10-band equalizer", color = Ink)
                 Text("App-owned DSP · PCM audio", color = Muted, fontSize = 11.sp)
             }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Equalizer", color = Color.White, modifier = Modifier.weight(1f))
+                    Text("Equalizer", color = Ink, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
                         checked = enabled,
                         onCheckedChange = {
@@ -295,7 +295,7 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text("Loudness normalisation", color = Cyan, fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("ReplayGain", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                Text("ReplayGain", color = Ink, modifier = Modifier.weight(1f), fontSize = 12.sp)
                                 androidx.compose.material3.Switch(checked = replayGainEnabled, onCheckedChange = {
                                     replayGainEnabled = it
                                     TenBandEqSettings.replayGainEnabled = it
@@ -327,19 +327,19 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                             HorizontalDivider(color = Raised)
                             Text("Output & dynamics", color = Cyan, fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Automatic EQ headroom", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                Text("Automatic EQ headroom", color = Ink, modifier = Modifier.weight(1f), fontSize = 12.sp)
                                 androidx.compose.material3.Switch(checked = autoHeadroom, onCheckedChange = {
                                     autoHeadroom = it
                                     TenBandEqSettings.autoHeadroom = it
                                     TenBandEqSettings.save(context)
                                 })
                             }
-                            Text("Preamp: %+.1f dB".format(preamp), color = Color.White, fontSize = 11.sp)
+                            Text("Preamp: %+.1f dB".format(preamp), color = Ink, fontSize = 11.sp)
                             Slider(value = preamp, onValueChange = {
                                 preamp = it; TenBandEqSettings.preampDb = it; TenBandEqSettings.save(context)
                             }, valueRange = -12f..12f)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Dynamic-range compressor", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                                Text("Dynamic-range compressor", color = Ink, modifier = Modifier.weight(1f), fontSize = 12.sp)
                                 androidx.compose.material3.Switch(checked = compressor, onCheckedChange = {
                                     compressor = it
                                     TenBandEqSettings.compressorEnabled = it
@@ -378,7 +378,7 @@ private fun EqualizerDialog(onDismiss: () -> Unit) {
                                     TenBandEqSettings.frequenciesHz[index].let {
                                         if (it >= 1000) "${it / 1000} kHz" else "${it} Hz"
                                     },
-                                    color = Color.White,
+                                    color = Ink,
                                     fontSize = 11.sp,
                                     modifier = Modifier.weight(1f)
                                 )
