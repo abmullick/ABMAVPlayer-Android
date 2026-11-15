@@ -21,7 +21,7 @@ The native Android companion to [ABM AV Player for Windows](https://github.com/a
 
 ## Visual design direction
 
-The Android app uses a deliberately bright, premium light appearance rather than a dark player skin. The main canvas and system bars are white; library rows, dialogs and Streaming Centre panels use soft neutral surfaces; primary text uses deep ink for clear contrast; teal and violet are reserved for actions, selection and brand accents. Fullscreen video remains black so the picture is not compromised. The same light design tokens are shared across the player, library, playback tools, equalizer and Streaming Centre.
+The Android app uses a deliberately bright, premium light appearance rather than a dark player skin. The main canvas and system bars are white; library rows, dialogs and Streaming Centre panels use soft neutral surfaces; primary text uses deep ink for clear contrast; teal and violet are reserved for actions, selection and brand accents. Fullscreen video remains black so the picture is not compromised. The shared design system lives in `app/src/main/java/com/abm/avplayer/AbmTheme.kt`. `AbmColors` is the single source of truth for semantic colors; `AbmTheme` supplies the Material color scheme, typography scale, font family and component shapes; `applyAbmLightSystemBars()` applies consistent Android system-bar styling. The main player, library, playback tools, equalizer and Streaming Centre consume this shared configuration rather than defining their own theme. New Compose screens should be wrapped in `AbmTheme { ... }` and use semantic tokens instead of hard-coded styling.
 
 ## Build
 
