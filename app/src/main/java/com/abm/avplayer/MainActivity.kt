@@ -415,7 +415,7 @@ class MainActivity : ComponentActivity() {
             if (playlistDialog) {
                 AlertDialog(
                     onDismissRequest = { playlistDialog = false },
-                    title = { Text("Create playlist", color = Color.White) },
+                    title = { Text("Create playlist", color = Ink) },
                     text = {
                         OutlinedTextField(
                             value = playlistName, onValueChange = { playlistName = it },
@@ -851,7 +851,7 @@ private fun CastSubtitleControl(available: Boolean, enabled: Boolean, onToggle: 
     if (available) {
         IconButton(onClick = onToggle) {
             Icon(Icons.Default.Subtitles, contentDescription = if (enabled) "Turn Cast subtitles off" else "Turn Cast subtitles on",
-                tint = if (enabled) Cyan else Color.White)
+                tint = if (enabled) Cyan else Ink)
         }
     }
 }
@@ -892,7 +892,7 @@ private fun LibraryScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ABM", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("ABM", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(10.dp))
             Text("LIBRARY", color = Muted, fontSize = 11.sp, letterSpacing = 2.sp)
             Spacer(Modifier.weight(1f))
@@ -913,7 +913,7 @@ private fun LibraryScreen(
                 Column(Modifier.fillMaxWidth().padding(top = 70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet, modifier = Modifier.size(54.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("Your library is waiting", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Your library is waiting", color = Ink, fontWeight = FontWeight.SemiBold)
                     Text("Import audio and video files to get started.", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(18.dp))
                     Button(onClick = onImport, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
@@ -931,7 +931,7 @@ private fun LibraryScreen(
                             Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Cyan)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(item.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.title, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(item.mimeType ?: "Media file", color = Muted, fontSize = 10.sp)
                             }
                             playlists.forEach { playlist ->
@@ -957,7 +957,7 @@ private fun LibraryScreen(
                     ) {
                         Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet)
                         Spacer(Modifier.width(12.dp))
-                        Text(playlist.name, color = Color.White, modifier = Modifier.weight(1f))
+                        Text(playlist.name, color = Ink, modifier = Modifier.weight(1f))
                         IconButton(onClick = { onDeletePlaylist(playlist) }) {
                             Icon(Icons.Default.DeleteOutline, contentDescription = "Delete playlist", tint = Muted)
                         }
@@ -1024,7 +1024,7 @@ private fun PlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                Text(if (castConnected) "PLAYING ON $castDeviceName" else "No video loaded", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                Text(if (castConnected) "PLAYING ON $castDeviceName" else "No video loaded", color = Ink, modifier = Modifier.align(Alignment.Center))
             }
             Row(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -1032,7 +1032,7 @@ private fun PlayerScreen(
             ) {
                 CastRouteButton()
                 IconButton(onClick = onFullscreen) {
-                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen", tint = Color.White)
+                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit fullscreen", tint = Ink)
                 }
             }
             Column(
@@ -1040,7 +1040,7 @@ private fun PlayerScreen(
                     .background(Color(0xCC090B12)).padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(title, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold)
                 if (castConnected && castQueueSummary.isNotBlank()) {
                     Text(castQueueSummary, color = Violet, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
@@ -1059,14 +1059,14 @@ private fun PlayerScreen(
                     Text(formatTime(position), color = Muted, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onPrevious, enabled = true) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Ink)
                         }
                         IconButton(onClick = onPlayPause) {
                             Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (playing) "Pause" else "Play", tint = Cyan)
                         }
                         IconButton(onClick = onNext, enabled = true) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Ink)
                         }
                         CastSubtitleControl(castSubtitleAvailable, castSubtitleEnabled, onCastSubtitleToggle)
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
@@ -1090,7 +1090,7 @@ private fun PlayerScreen(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("ABM", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("ABM", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     Text("AV PLAYER", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                 }
                 AdvancedPlaybackMenu(player = player, onPickSubtitle = onPickSubtitle)
@@ -1135,7 +1135,7 @@ private fun PlayerScreen(
                         }
                     }
                 }
-                Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                Text(title, color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (castConnected && castQueueSummary.isNotBlank()) {
@@ -1168,7 +1168,7 @@ private fun PlayerScreen(
                     }
                     IconButton(onClick = onPrevious, enabled = true) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
-                            tint = Color.White, modifier = Modifier.size(30.dp))
+                            tint = Ink, modifier = Modifier.size(30.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Button(onClick = onPlayPause, shape = CircleShape,
@@ -1181,7 +1181,7 @@ private fun PlayerScreen(
                     Spacer(Modifier.width(12.dp))
                     IconButton(onClick = onNext, enabled = true) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next",
-                            tint = Color.White, modifier = Modifier.size(30.dp))
+                            tint = Ink, modifier = Modifier.size(30.dp))
                     }
                     IconButton(onClick = onRepeat, enabled = true) {
                         Icon(Icons.Default.Repeat, contentDescription = "Repeat",
@@ -1194,13 +1194,13 @@ private fun PlayerScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
                     Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Cyan)
-                    Spacer(Modifier.width(8.dp)); Text("Open media", color = Color.White)
+                    Spacer(Modifier.width(8.dp)); Text("Open media", color = Ink)
                 }
                 Button(onClick = onLibrary, modifier = Modifier.weight(1f).height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
                     Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Violet)
-                    Spacer(Modifier.width(8.dp)); Text("Library", color = Color.White)
+                    Spacer(Modifier.width(8.dp)); Text("Library", color = Ink)
                 }
             }
             Button(onClick = onStreaming, modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -1208,7 +1208,7 @@ private fun PlayerScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Raised)) {
                 Icon(Icons.Default.Language, contentDescription = null, tint = Cyan)
                 Spacer(Modifier.width(9.dp))
-                Text("Streaming services", color = Color.White)
+                Text("Streaming services", color = Ink)
                 Spacer(Modifier.weight(1f))
                 Text("YOUTUBE · NETFLIX · MORE", color = Muted, fontSize = 9.sp)
             }
