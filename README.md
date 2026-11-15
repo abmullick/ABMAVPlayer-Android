@@ -11,13 +11,17 @@ The native Android companion to [ABM AV Player for Windows](https://github.com/a
 ## Product direction
 
 - Native Kotlin application with Jetpack Compose.
-- Premium ABM dark interface: graphite surfaces, cyan/violet accents, cinematic artwork and restrained motion.
+- Premium ABM light interface: bright white canvas, soft pearl-gray surfaces, deep ink typography, restrained teal/violet accents, refined rounded cards and subtle motion.
 - Media3/ExoPlayer as the Android playback and media-session foundation.
 - Android Storage Access Framework for user-selected files.
 - Room for persistent playlists, queue metadata and playback history.
 - Google Cast SDK for native Cast discovery and sessions.
 - Android WebView for the separate Streaming Centre.
 - Advanced codec support to be evaluated through a separately integrated native engine (FFmpeg/libmpv) where Android platform codecs are insufficient.
+
+## Visual design direction
+
+The Android app uses a deliberately bright, premium light appearance rather than a dark player skin. The main canvas and system bars are white; library rows, dialogs and Streaming Centre panels use soft neutral surfaces; primary text uses deep ink for clear contrast; teal and violet are reserved for actions, selection and brand accents. Fullscreen video remains black so the picture is not compromised. The shared design system lives in `app/src/main/java/com/abm/avplayer/AbmTheme.kt`. `AbmColors` is the single source of truth for semantic colors; `AbmTheme` supplies the Material color scheme, typography scale, font family and component shapes; `applyAbmLightSystemBars()` applies consistent Android system-bar styling. The main player, library, playback tools, equalizer and Streaming Centre consume this shared configuration rather than defining their own theme. New Compose screens should be wrapped in `AbmTheme { ... }` and use semantic tokens instead of hard-coded styling.
 
 ## Build
 
