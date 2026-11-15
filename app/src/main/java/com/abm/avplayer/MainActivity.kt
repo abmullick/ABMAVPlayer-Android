@@ -69,25 +69,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Shared ABM light design tokens. Keep the canvas genuinely bright white;
- // use soft neutral surfaces and restrained, high-contrast accents.
-val Canvas = Color(0xFFFFFFFF)
-val Panel = Color(0xFFF7F9FC)
-val Raised = Color(0xFFEDF1F6)
-val Cyan = Color(0xFF087F8C)
-val Violet = Color(0xFF6655B8)
-val Muted = Color(0xFF667085)
-val Ink = Color(0xFF17212F)
-
-fun ComponentActivity.applyAbmLightSystemBars() {
-    window.statusBarColor = android.graphics.Color.WHITE
-    window.navigationBarColor = android.graphics.Color.WHITE
-    WindowInsetsControllerCompat(window, window.decorView).apply {
-        isAppearanceLightStatusBars = true
-        isAppearanceLightNavigationBars = true
-    }
-}
-
 class MainActivity : ComponentActivity() {
     private var castContext: CastContext? = null
     private var castListener: SessionManagerListener<CastSession>? = null
@@ -282,12 +263,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MaterialTheme(colorScheme = lightColorScheme(
-                primary = Cyan, onPrimary = Color.White,
-                secondary = Violet, background = Canvas, onBackground = Ink,
-                surface = Panel, onSurface = Ink,
-                surfaceVariant = Raised, onSurfaceVariant = Muted
-            )) {
+            AbmTheme {
                 Surface(Modifier.fillMaxSize(), color = Canvas) {
                     if (page == "library") {
                         LibraryScreen(
