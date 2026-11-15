@@ -519,7 +519,7 @@ class StreamingCentreActivity : ComponentActivity() {
             }
 
             MaterialTheme(colorScheme = lightColorScheme(
-                primary = Cyan, onPrimary = Ink,
+                primary = Cyan, onPrimary = Color.White,
                 secondary = Violet, background = Canvas, onBackground = Ink,
                 surface = Panel, onSurface = Ink,
                 surfaceVariant = Raised, onSurfaceVariant = Muted
