@@ -60,5 +60,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-cast-framework:22.0.0")
     implementation("androidx.mediarouter:mediarouter:1.7.0")
 
+    // libtorrent 2.1.2.1 Android AAR: Java API plus native binaries for Android ABIs.
+    implementation("com.frostwire:jlibtorrent-android:2.1.2.1@aar")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
