@@ -46,6 +46,7 @@ class TorrentManagerService : Service() {
     private lateinit var session: SessionManager
     private val handles = ConcurrentHashMap<String, TorrentHandle>()
     private val errors = ConcurrentHashMap<String, String>()
+    private val pausedHashes = ConcurrentHashMap.newKeySet<String>()
     private val downloadRoot by lazy { File(getExternalFilesDir(null), "Torrent Downloads").apply { mkdirs() } }
 
     override fun onCreate() {
@@ -53,11 +54,9 @@ class TorrentManagerService : Service() {
         createNotificationChannel()
         session = SessionManager()
         val settings = SettingsPack()
-            .setDhtBootstrapNodes("dht.libtorrent.org:25401,router.bittorrent.com:6881,dht.transmissionbt.com:6881")
-            .setEnableDht(true)
-            .setEnableLsd(true)
-            .setAnnounceToAllTrackers(true)
-            .setAnnounceToAllTiers(true)
+        settings.setDhtBootstrapNodes("dht.libtorrent.org:25401,router.bittorrent.com:6881,dht.transmissionbt.com:6881")
+        settings.setEnableDht(true)
+        settings.setEnableLsd(true)
         session.start(com.frostwire.jlibtorrent.SessionParams(settings))
     }
 
@@ -103,7 +102,7 @@ class TorrentManagerService : Service() {
                     uploadRate = status.uploadRate(),
                     peers = status.numPeers(),
                     hasMetadata = status.hasMetadata(),
-                    paused = handle.flags().and(com.frostwire.jlibtorrent.swig.torrent_flags_t.paused).nonZero(),
+                    paused = pausedHashes.contains(hash),
                     error = errors[hash].orEmpty()
                 )
             }.getOrNull()
@@ -131,17 +130,15 @@ class TorrentManagerService : Service() {
         handle.resume()
     }
 
-    fun pause(hash: String) = handle(hash).pause()
-    fun resume(hash: String) = handle(hash).resume()
+    fun pause(hash: String) { handle(hash).pause(); pausedHashes.add(hash) }
+    fun resume(hash: String) { handle(hash).resume(); pausedHashes.remove(hash) }
 
     fun remove(hash: String, deleteData: Boolean) {
         val handle = handles.remove(hash) ?: return
-        if (handle.isValid()) {
-            if (deleteData) {
-                session.remove(handle, com.frostwire.jlibtorrent.swig.remove_flags_t.delete_files)
-            } else session.remove(handle)
-        }
+        if (handle.isValid()) session.remove(handle)
+        if (deleteData) File(downloadRoot, hash).deleteRecursively()
         errors.remove(hash)
+        pausedHashes.remove(hash)
     }
 
     fun setRateLimits(downloadBytesPerSecond: Int, uploadBytesPerSecond: Int) {
@@ -205,6 +202,7 @@ class TorrentManagerService : Service() {
     override fun onDestroy() {
         Thread({ runCatching { session.stop() } }, "ABM-Torrent-Shutdown").apply { isDaemon = true; start() }
         handles.clear()
+        pausedHashes.clear()
         super.onDestroy()
     }
 
@@ -213,6 +211,3 @@ class TorrentManagerService : Service() {
         private const val NOTIFICATION_ID = 4102
     }
 }
-
-private fun com.frostwire.jlibtorrent.swig.torrent_flags_t.nonZero(): Boolean =
-    this.to_int() and com.frostwire.jlibtorrent.swig.torrent_flags_t.paused.to_int() != 0
