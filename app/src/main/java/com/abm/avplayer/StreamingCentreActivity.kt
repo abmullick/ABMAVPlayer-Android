@@ -101,6 +101,7 @@ class StreamingCentreActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyAbmLightSystemBars()
         originalOrientation = requestedOrientation
         setContent {
             var homeMode by remember { mutableStateOf(true) }
@@ -517,7 +518,12 @@ class StreamingCentreActivity : ComponentActivity() {
                 }
             }
 
-            MaterialTheme {
+            MaterialTheme(colorScheme = lightColorScheme(
+                primary = Cyan, onPrimary = Ink,
+                secondary = Violet, background = Canvas, onBackground = Ink,
+                surface = Panel, onSurface = Ink,
+                surfaceVariant = Raised, onSurfaceVariant = Muted
+            )) {
                 Column(Modifier.fillMaxSize().background(Canvas)) {
                     Row(
                         Modifier.fillMaxWidth().background(Panel).padding(horizontal = 8.dp, vertical = 5.dp),
@@ -533,20 +539,20 @@ class StreamingCentreActivity : ComponentActivity() {
                                 browser?.loadUrl("about:blank")
                             } else finish()
                         }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Ink)
                         }
                         IconButton(onClick = { if (!homeMode && canGoForward) browser?.goForward() },
                             enabled = !homeMode && canGoForward) {
                             Icon(Icons.Default.ArrowForward, contentDescription = "Forward",
-                                tint = if (!homeMode && canGoForward) Color.White else Muted)
+                                tint = if (!homeMode && canGoForward) Ink else Muted)
                         }
                         IconButton(onClick = { if (!homeMode) browser?.reload() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = Color.White)
+                            Icon(Icons.Default.Refresh, contentDescription = "Reload", tint = Ink)
                         }
                         Column(Modifier.weight(1f).padding(start = 4.dp)) {
                             Text("ABM  ·  STREAMING", color = Cyan, fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                            Text(pageTitle, color = Color.White, fontSize = 12.sp, maxLines = 1,
+                            Text(pageTitle, color = Ink, fontSize = 12.sp, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = {
@@ -557,7 +563,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             browser?.stopLoading()
                             browser?.loadUrl("about:blank")
                         }) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", tint = Color.White)
+                            Icon(Icons.Default.Home, contentDescription = "Home", tint = Ink)
                         }
                         AndroidView(
                             factory = { context ->
@@ -571,7 +577,7 @@ class StreamingCentreActivity : ComponentActivity() {
                             Icon(Icons.Default.Cast, contentDescription = "Find TVs", tint = Cyan)
                         }
                         IconButton(onClick = { openInBrowser() }, enabled = !homeMode && currentUrl.startsWith("https://")) {
-                            Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser", tint = Color.White)
+                            Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in browser", tint = Ink)
                         }
                     }
                     if (!homeMode && pageProgress in 1..99) {
@@ -585,11 +591,11 @@ class StreamingCentreActivity : ComponentActivity() {
                     }
                     if (castRemoteConnected) {
                         val remote = runCatching { CastContext.getSharedInstance(this@StreamingCentreActivity).sessionManager.currentCastSession?.remoteMediaClient }.getOrNull()
-                        Column(Modifier.fillMaxWidth().background(Color(0xFF18313A)).padding(horizontal = 12.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Column(Modifier.fillMaxWidth().background(Color(0xFFDCEFF1)).padding(horizontal = 12.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("GOOGLE CAST · " + castRemoteState.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text(castRemoteTitle.ifBlank { "Connected receiver" }, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(castRemoteTitle.ifBlank { "Connected receiver" }, color = Ink, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(formatCastTime(castRemotePosition) + " / " + formatCastTime(castRemoteDuration), color = Muted, fontSize = 10.sp)
                                 }
                                 TextButton(onClick = { controlGoogleCast(if (castRemoteState == "Playing" || castRemoteState == "Buffering") "pause" else "play") }, enabled = remote != null) {
@@ -608,7 +614,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         Column(Modifier.fillMaxWidth().background(Raised).padding(horizontal = 12.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("TV · " + receiver.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("TV · " + receiver.name, color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                     Text("Connection: " + receiverConnectionState, color = if (receiverConnectionState == "Connected" || receiverConnectionState == "Reconnected") Cyan else Color(0xFFFFB86B), fontSize = 10.sp)
                                     if (receiver.supportsDlna) Text("DLNA playback: " + receiverPlaybackState + "  ·  " + receiverPosition + " / " + receiverDuration, color = Muted, fontSize = 10.sp)
                                     if (receiver.supportsDial) Text("DIAL app state: " + receiverDialAppState, color = Muted, fontSize = 10.sp)
@@ -683,10 +689,10 @@ class StreamingCentreActivity : ComponentActivity() {
                         if (homeMode) {
                             Column(
                                 Modifier.fillMaxSize().background(
-                                    Brush.verticalGradient(listOf(Color(0xFF111827), Canvas, Canvas))
+                                    Brush.verticalGradient(listOf(Color(0xFFF2F6FA), Color.White, Canvas))
                                 ).padding(18.dp)
                             ) {
-                                Text("YOUR STREAMING WORLD", color = Color.White, fontSize = 22.sp,
+                                Text("YOUR STREAMING WORLD", color = Ink, fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(6.dp))
                                 Text("Open an official service and sign in with your own account.",
@@ -710,7 +716,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                                 Text(provider.name.take(1), color = provider.accent,
                                                     fontWeight = FontWeight.Bold, fontSize = 20.sp)
                                             }
-                                            Text(provider.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text(provider.name, color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(provider.subtitle, color = Muted, fontSize = 10.sp,
                                                 minLines = 2)
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -731,7 +737,7 @@ class StreamingCentreActivity : ComponentActivity() {
                         } else if (browserError.isNotBlank()) {
                             Column(Modifier.align(Alignment.Center).padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("This page could not be loaded", color = Color.White,
+                                Text("This page could not be loaded", color = Ink,
                                     fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(8.dp))
                                 Text(browserError, color = Muted, fontSize = 12.sp)
@@ -757,14 +763,14 @@ class StreamingCentreActivity : ComponentActivity() {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
-                                        Text("FIND TVs", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                                        Text("FIND TVs", color = Ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                                         Text("Google Cast · DLNA / UPnP · YouTube DIAL", color = Muted, fontSize = 10.sp)
                                     }
                                     TextButton(onClick = { refreshReceivers() }, enabled = !discoveryBusy) { Text("Refresh", color = Cyan) }
                                 }
                                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Raised).padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
-                                        Text("Google Cast / Chromecast", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text("Google Cast / Chromecast", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                         Text("Use Google's official receiver picker", color = Muted, fontSize = 10.sp)
                                     }
                                     AndroidView(factory = { context -> MediaRouteButton(context).also { button -> runCatching { CastButtonFactory.setUpMediaRouteButton(context, button) } } }, modifier = Modifier.size(48.dp))
@@ -780,9 +786,9 @@ class StreamingCentreActivity : ComponentActivity() {
                                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                     lazyItems(receivers, key = { it.id }) { receiver ->
                                         val selected = receiver.id == selectedReceiverId
-                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) Color(0xFF263B4A) else Raised).clickable { selectedReceiverId = receiver.id }.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) Color(0xFFDCEFF1) else Raised).clickable { selectedReceiverId = receiver.id }.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Column(Modifier.weight(1f)) {
-                                                Text(receiver.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                Text(receiver.name, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                                 Text(receiver.protocolLabel + " · " + receiver.address, color = Cyan, fontSize = 10.sp)
                                             }
                                             RadioButton(selected = selected, onClick = { selectedReceiverId = receiver.id })
@@ -816,7 +822,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column(Modifier.weight(1f)) {
-                                                Text(app.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(app.name, color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                                 Text(app.state + " · " + app.detail, color = Muted, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                             }
                                             TextButton(onClick = { controlDialApplication(selectedReceiver, app.name, true) }, enabled = !receiverControlBusy && !app.state.equals("UNAVAILABLE", true)) { Text("Launch", color = Cyan, fontSize = 10.sp) }
@@ -831,7 +837,7 @@ class StreamingCentreActivity : ComponentActivity() {
                                         receiverPlaybackState = "Starting…"
                                         requestDlnaCast(selectedReceiver, scope) { castMessage = it }
                                         receiverPanel = false
-                                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23675F))) { Text("Play current video on selected TV") }
+                                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF087F72))) { Text("Play current video on selected TV") }
                                 }
                                 if (selectedReceiver?.supportsDial == true) {
                                     OutlinedButton(onClick = {
