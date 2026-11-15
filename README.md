@@ -61,6 +61,12 @@ The debug APK is normally produced at `app/build/outputs/apk/debug/app-debug.apk
 - Google Cast SDK route picker, session lifecycle and remote play/pause/seek controls using the Default Media Receiver.
 - Casting imported SAF media through a temporary LAN HTTP server with byte-range responses; direct HTTP/HTTPS media URLs can also be sent to a Cast receiver.
 
+## Torrent Stream (initial Android implementation)
+
+Open **Torrent Stream** from the main player. The Android client uses FrostWire jlibtorrent 2.1.2.1 (libtorrent 2.1) in a dedicated foreground service. It accepts user-supplied magnet URIs and local .torrent files, retrieves metadata, lists torrent files, lets the user select one file to prioritise, and supports pause/resume/remove, progress, peer count, transfer rates and global bandwidth limits through the engine API. Download data is kept under the app-specific external files directory in `Torrent Downloads/<info-hash>`; removing a task retains its data by default. The session enables DHT and local peer discovery.
+
+This is the first Android torrent milestone, not full Windows parity yet. Verified-piece progressive Media3 playback, seek-driven piece scheduling, authenticated loopback/LAN HTTP streaming, independent Torrent DLNA discovery and TV casting, durable resume-data restoration, configurable cache quota/eviction, per-task seeding controls, and physical-device/network validation remain to be implemented. The Android service currently keeps its active session in-process; do not treat process death as a guaranteed download-resume path. Only download and share content you are legally entitled to access.
+
 ## Streaming Centre
 
 Open **Streaming services** from the main player. The Android Streaming Centre is a separate activity and WebView, independent of local media playback and its queue. It provides launch cards for YouTube, Netflix, Prime Video, JioHotstar, Sony LIV and ZEE5; Back/Forward/Reload/Home navigation; HTML5 fullscreen; external-browser handoff; and a persistent app-private WebView cookie profile for supported sign-in sessions. Sign in directly with each provider using your own account. ABM AV Player does not collect credentials, proxy provider content or provide subscriptions.
