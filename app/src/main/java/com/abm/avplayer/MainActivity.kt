@@ -79,7 +79,7 @@ val Violet = Color(0xFF6655B8)
 val Muted = Color(0xFF667085)
 val Ink = Color(0xFF17212F)
 
-private fun ComponentActivity.applyAbmLightSystemBars() {
+fun ComponentActivity.applyAbmLightSystemBars() {
     window.statusBarColor = android.graphics.Color.WHITE
     window.navigationBarColor = android.graphics.Color.WHITE
     WindowInsetsControllerCompat(window, window.decorView).apply {
